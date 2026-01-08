@@ -41,14 +41,37 @@ class handler(BaseHTTPRequestHandler):
             change = float(current_price - prev_close)
             change_percent = float((change / prev_close) * 100) if prev_close != 0 else 0
 
-            # Resample if needed
+            # Resample if needed (Daily is default)
+            resampled_df = df
             if interval == 'w':
-                # Weekly resampling: Last close price of the week
-                df = df.resample('W').last().dropna()
+                # Weekly resampling for OHLC
+                resampled_df = df.resample('W').agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last'
+                }).dropna()
             elif interval == 'm':
-                # Monthly resampling: Last close price of the month
-                df = df.resample('M').last().dropna()
+                # Monthly resampling for OHLC
+                resampled_df = df.resample('M').agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last'
+                }).dropna()
             
+            # Prepare OHLC data for chartjs-chart-financial
+            # Format: { x: timestamp, o: open, h: high, l: low, c: close }
+            ohlc_data = []
+            for index, row in resampled_df.iterrows():
+                ohlc_data.append({
+                    "x": index.strftime('%Y-%m-%d'),
+                    "o": float(row['Open']),
+                    "h": float(row['High']),
+                    "l": float(row['Low']),
+                    "c": float(row['Close'])
+                })
+
             chart_data = {
                 "ticker": ticker,
                 "range": date_range,
@@ -56,8 +79,9 @@ class handler(BaseHTTPRequestHandler):
                 "current_price": current_price,
                 "change": change,
                 "change_percent": round(change_percent, 2),
-                "labels": df.index.strftime('%Y-%m-%d').tolist(),
-                "prices": df['Close'].tolist()
+                "labels": resampled_df.index.strftime('%Y-%m-%d').tolist(),
+                "prices": resampled_df['Close'].tolist(),
+                "ohlc": ohlc_data
             }
             
             self.send_response(200)

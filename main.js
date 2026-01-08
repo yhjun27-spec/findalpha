@@ -135,8 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
         tickerInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSearch(tickerInput);
         });
-        setupChartFilters();
     }
+
+    // Setup chart filters for both index and chart-detail pages
+    setupChartFilters();
 
     if (headerTickerInput) {
         headerTickerInput.addEventListener('keypress', (e) => {
@@ -251,7 +253,8 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
                 const data = await res.json();
-                renderChart(data.prices, data.labels);
+                // Pass OHLC data to renderChart for detail page
+                renderChart(data.prices, data.labels, data.ohlc);
             } catch (e) {
                 renderChart(mock.chartData, ['-', '-', '-', '-', '-', '-', '-']);
             }
@@ -268,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderChart(prices, labels) {
+    function renderChart(prices, labels, ohlc = null) {
         const chartElement = document.getElementById('stock-chart');
         if (!chartElement) return;
 
@@ -276,50 +279,89 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stockChart) stockChart.destroy();
 
         const isDark = body.classList.contains('dark-theme');
-        const color = isDark ? '#818cf8' : '#4f46e5';
+        const accentColor = isDark ? '#818cf8' : '#4f46e5';
 
-        stockChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '주가 (USD)',
-                    data: prices,
-                    borderColor: color,
-                    backgroundColor: 'rgba(129, 140, 248, 0.1)',
-                    fill: true,
-                    tension: 0.2,
-                    pointRadius: (prices && prices.length > 30) ? 0 : 4,
-                    pointBackgroundColor: color
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                        ticks: { color: isDark ? '#94a3b8' : '#64748b' }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: {
-                            color: isDark ? '#94a3b8' : '#64748b',
-                            maxTicksLimit: 10
+        // Decide chart type: Candlestick for detail page, Line for dashboard
+        if (isChartPage && ohlc) {
+            stockChart = new Chart(ctx, {
+                type: 'candlestick',
+                data: {
+                    datasets: [{
+                        label: '주가 (Candlestick)',
+                        data: ohlc,
+                        // Customizing candlestick colors
+                        color: {
+                            up: '#22c55e',    // Green for up
+                            down: '#ef4444',  // Red for down
+                            unchanged: '#94a3b8'
+                        }
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            type: 'timeseries',
+                            time: { unit: 'day' },
+                            grid: { display: false },
+                            ticks: { color: isDark ? '#94a3b8' : '#64748b' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: isDark ? '#94a3b8' : '#64748b' }
                         }
                     }
                 }
-            }
-        });
+            });
+        } else {
+            // Line Chart (Dashboard)
+            stockChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '주가 (USD)',
+                        data: prices,
+                        borderColor: accentColor,
+                        backgroundColor: 'rgba(129, 140, 248, 0.1)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: (prices && prices.length > 30) ? 0 : 4,
+                        pointBackgroundColor: accentColor
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: isDark ? '#94a3b8' : '#64748b' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                maxTicksLimit: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 
     function updateChartTheme() {
         const isDark = body.classList.contains('dark-theme');
         const color = isDark ? '#818cf8' : '#4f46e5';
         if (stockChart) {
-            stockChart.data.datasets[0].borderColor = color;
-            stockChart.data.datasets[0].pointBackgroundColor = color;
+            if (stockChart.config.type === 'line') {
+                stockChart.data.datasets[0].borderColor = color;
+                stockChart.data.datasets[0].pointBackgroundColor = color;
+            }
             stockChart.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
             stockChart.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
             stockChart.update();

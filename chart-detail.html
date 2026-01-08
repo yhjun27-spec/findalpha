@@ -9,7 +9,11 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
         rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.0/dist/chartjs-chart-financial.js"></script>
     <script src="main.js" defer></script>
 </head>
 
@@ -31,12 +35,27 @@
     </header>
 
     <main class="dashboard-section">
-        <div class="chart-container card" style="height: 80vh;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1 id="detail-ticker-title" class="ticker-name">기다려 주세요...</h1>
-                <div class="sentiment-badge strongly-positive">Chart Analysis</div>
+        <div class="chart-container card" style="height: 85vh; display: flex; flex-direction: column;">
+            <div class="chart-header">
+                <h1 id="detail-ticker-title" class="ticker-name" style="font-size: 1.8rem;">기다려 주세요...</h1>
+                <div class="chart-filters">
+                    <div class="filter-group range-filters">
+                        <button class="filter-btn" data-range="1m">1M</button>
+                        <button class="filter-btn" data-range="3m">3M</button>
+                        <button class="filter-btn" data-range="6m">6M</button>
+                        <button class="filter-btn active" data-range="1y">1Y</button>
+                        <button class="filter-btn" data-range="5y">5Y</button>
+                        <button class="filter-btn" data-range="max">Max</button>
+                    </div>
+                    <div class="filter-divider"></div>
+                    <div class="filter-group interval-filters">
+                        <button class="filter-btn active" data-interval="d">일봉</button>
+                        <button class="filter-btn" data-interval="w">주봉</button>
+                        <button class="filter-btn" data-interval="m">월봉</button>
+                    </div>
+                </div>
             </div>
-            <div class="chart-wrapper" style="height: calc(100% - 100px);">
+            <div class="chart-wrapper" style="flex: 1; min-height: 0;">
                 <canvas id="stock-chart"></canvas>
             </div>
         </div>
