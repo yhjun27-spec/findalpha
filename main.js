@@ -151,12 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const chartCard = document.getElementById('chart-card');
         const earningsCard = document.getElementById('earnings-card');
 
-        // Instead of navigation if clicking the card generally, 
-        // we might want specific interaction. For now keep as is, 
-        // but ensure filter clicks don't trigger the card navigation if possible.
-        // Actually, navigation to detail page is fine.
         if (chartCard && !isChartPage) {
-            // Filter clicks shouldn't trigger navigation
             const filters = chartCard.querySelector('.chart-filters');
             if (filters) {
                 filters.onclick = (e) => e.stopPropagation();
@@ -175,10 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
             if (response.ok) {
                 stockData = await response.json();
-                console.log('FinanceDataReader Data Fetched:', stockData);
             }
         } catch (e) {
-            console.warn('Backend Fetch failed, falling back to mock data', e);
+            console.warn('Backend Fetch failed', e);
         }
 
         const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
@@ -249,14 +243,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function renderDetailView(ticker) {
         const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
+        const titleEl = document.getElementById('detail-ticker-title');
+        if (titleEl) titleEl.innerText = `${ticker} 주가 차트 상세`;
+
         if (isChartPage) {
             try {
                 const res = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
                 const data = await res.json();
-                // Pass OHLC data to renderChart for detail page
                 renderChart(data.prices, data.labels, data.ohlc);
             } catch (e) {
-                renderChart(mock.chartData, ['-', '-', '-', '-', '-', '-', '-']);
+                console.error('Detail view fetch failed', e);
             }
         } else if (isEarningsPage) {
             document.getElementById('earnings-list').innerHTML = (mock.earnings || []).map(e => `
@@ -266,7 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             `).join('');
             if (mock.earnings && mock.earnings[0]) {
-                document.getElementById('last-earnings-date').innerText = mock.earnings[0].date;
+                const dateEl = document.getElementById('last-earnings-date');
+                if (dateEl) dateEl.innerText = mock.earnings[0].date;
             }
         }
     }
@@ -278,45 +275,89 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = chartElement.getContext('2d');
         if (stockChart) stockChart.destroy();
 
+        if (typeof Chart !== 'undefined' && Chart.register) {
+            // Register financial components if they exist in global scope (UMD)
+            const financial = window['chartjs-chart-financial'];
+            if (financial) {
+                Chart.register(financial.CandlestickController, financial.CandlestickElement, financial.OhlcController, financial.OhlcElement);
+            } else if (typeof CandlestickController !== 'undefined') {
+                Chart.register(CandlestickController, CandlestickElement);
+            }
+        }
+
         const isDark = body.classList.contains('dark-theme');
         const accentColor = isDark ? '#818cf8' : '#4f46e5';
 
-        // Decide chart type: Candlestick for detail page, Line for dashboard
-        if (isChartPage && ohlc) {
+        if (isChartPage && ohlc && ohlc.length > 0) {
+            // Filter out invalid OHLC data points
+            const formattedOhlc = ohlc.map(d => ({
+                x: luxon.DateTime.fromISO(d.x).valueOf(),
+                o: parseFloat(d.o),
+                h: parseFloat(d.h),
+                l: parseFloat(d.l),
+                c: parseFloat(d.c)
+            }));
+
+            // ERROR DEBUGGING START
+            console.log('--- Chart Debugging ---');
+            console.log('Chart global:', typeof Chart !== 'undefined');
+            console.log('chartjs-adapter-luxon:', typeof DateTime !== 'undefined' || (typeof luxon !== 'undefined' && luxon.DateTime));
+            console.log('window["chartjs-chart-financial"]:', window['chartjs-chart-financial']);
+            console.log('Is candlestick registered?:', Chart.registry.controllers.items['candlestick'] !== undefined);
+            console.log('OHLC Data sample:', formattedOhlc[0]);
+            // ERROR DEBUGGING END
+
             stockChart = new Chart(ctx, {
                 type: 'candlestick',
                 data: {
                     datasets: [{
                         label: '주가 (Candlestick)',
-                        data: ohlc,
-                        // Customizing candlestick colors
+                        data: formattedOhlc,
                         color: {
-                            up: '#22c55e',    // Green for up
-                            down: '#ef4444',  // Red for down
+                            up: '#22c55e',
+                            down: '#ef4444',
                             unchanged: '#94a3b8'
-                        }
+                        },
+                        borderColor: isDark ? '#ffffff33' : '#0000001a'
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const d = context.raw;
+                                    return [
+                                        `Open: $${d.o.toFixed(2)}`,
+                                        `High: $${d.h.toFixed(2)}`,
+                                        `Low: $${d.l.toFixed(2)}`,
+                                        `Close: $${d.c.toFixed(2)}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: {
                             type: 'timeseries',
-                            time: { unit: 'day' },
                             grid: { display: false },
-                            ticks: { color: isDark ? '#94a3b8' : '#64748b' }
+                            ticks: {
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                source: 'auto'
+                            }
                         },
                         y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            beginAtZero: false,
+                            grid: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },
                             ticks: { color: isDark ? '#94a3b8' : '#64748b' }
                         }
                     }
                 }
             });
         } else {
-            // Line Chart (Dashboard)
             stockChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -328,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         backgroundColor: 'rgba(129, 140, 248, 0.1)',
                         fill: true,
                         tension: 0.2,
-                        pointRadius: (prices && prices.length > 30) ? 0 : 4,
+                        pointRadius: (prices && prices.length > 50) ? 0 : 3,
                         pointBackgroundColor: accentColor
                     }]
                 },
@@ -338,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     plugins: { legend: { display: false } },
                     scales: {
                         y: {
-                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            grid: { color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },
                             ticks: { color: isDark ? '#94a3b8' : '#64748b' }
                         },
                         x: {
@@ -367,4 +408,5 @@ document.addEventListener('DOMContentLoaded', () => {
             stockChart.update();
         }
     }
+
 });
