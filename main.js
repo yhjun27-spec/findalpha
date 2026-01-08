@@ -45,6 +45,8 @@ const MOCK_DATA = {
 
 let stockChart = null;
 let currentTicker = 'AAPL';
+let currentRange = '1y';
+let currentInterval = 'd';
 
 document.addEventListener('DOMContentLoaded', () => {
     const searchBtn = document.getElementById('search-btn');
@@ -76,6 +78,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stockChart) updateChartTheme();
     });
 
+    // Chart Filters logic
+    const setupChartFilters = () => {
+        const rangeBtns = document.querySelectorAll('.range-filters .filter-btn');
+        const intervalBtns = document.querySelectorAll('.interval-filters .filter-btn');
+
+        rangeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentRange = btn.dataset.range;
+                toggleFilterActive(rangeBtns, btn);
+                refreshChartData();
+            });
+        });
+
+        intervalBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentInterval = btn.dataset.interval;
+                toggleFilterActive(intervalBtns, btn);
+                refreshChartData();
+            });
+        });
+    };
+
+    const toggleFilterActive = (group, activeBtn) => {
+        group.forEach(btn => btn.classList.remove('active'));
+        activeBtn.classList.add('active');
+    };
+
+    const refreshChartData = () => {
+        if (isMainPage) {
+            renderDashboard(currentTicker);
+        } else if (isChartPage) {
+            renderDetailView(currentTicker);
+        }
+    };
+
     const handleSearch = (input) => {
         const ticker = input.value.trim().toUpperCase();
         if (!ticker) return;
@@ -98,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tickerInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSearch(tickerInput);
         });
+        setupChartFilters();
     }
 
     if (headerTickerInput) {
@@ -111,7 +149,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const chartCard = document.getElementById('chart-card');
         const earningsCard = document.getElementById('earnings-card');
 
-        if (chartCard) {
+        // Instead of navigation if clicking the card generally, 
+        // we might want specific interaction. For now keep as is, 
+        // but ensure filter clicks don't trigger the card navigation if possible.
+        // Actually, navigation to detail page is fine.
+        if (chartCard && !isChartPage) {
+            // Filter clicks shouldn't trigger navigation
+            const filters = chartCard.querySelector('.chart-filters');
+            if (filters) {
+                filters.onclick = (e) => e.stopPropagation();
+            }
             chartCard.onclick = () => window.location.href = `chart-detail.html?ticker=${ticker}`;
         }
         if (earningsCard) {
@@ -123,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let stockData = null;
 
         try {
-            const response = await fetch(`/api/historical?ticker=${ticker}`);
+            const response = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
             if (response.ok) {
                 stockData = await response.json();
                 console.log('FinanceDataReader Data Fetched:', stockData);
@@ -202,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
         if (isChartPage) {
             try {
-                const res = await fetch(`/api/historical?ticker=${ticker}`);
+                const res = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
                 const data = await res.json();
                 renderChart(data.prices, data.labels);
             } catch (e) {
