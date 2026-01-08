@@ -33,8 +33,8 @@ class handler(BaseHTTPRequestHandler):
                 "current_price": current_price,
                 "change": change,
                 "change_percent": round(change_percent, 2),
-                "labels": df_reset['Date'].dt.strftime('%Y-%m-%d').tolist(),
-                "prices": df_reset['Close'].tolist()
+                "labels": df.index.strftime('%Y-%m-%d').tolist(),
+                "prices": df['Close'].tolist()
             }
             
             self.send_response(200)
