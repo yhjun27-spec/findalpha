@@ -20,96 +20,262 @@ const MOCK_DATA = {
         name: 'NVIDIA Corp.',
         price: '522.53',
         sentiment: 'Strongly Positive',
-        summary: '엔비디아는 AI 가속기 시장의 사실상 독점 체제를 유지하고 있습니다. 데이터 센터 수요의 폭발적인 증가가 실적 성장을 견인하고 있습니다.',
-        risks: ['높은 밸류에이션 부담', '대중국 수출 규제', '후발 주자들의 추격'],
-        growth: ['생성형 AI 인프라 확충', '옴니버스 플랫폼 확장', '차세대 블랙웰 아키텍처 기대감']
+        desc: '엔비디아는 게이밍 및 가속 컴퓨팅을 위한 그래픽 처리 장치(GPU)와 데이터 센터를 위한 시스템 온 칩 유닛(SoC)을 설계합니다.',
+        sector: 'Technology',
+        marketCap: '1.29T',
+        irWeb: 'https://investor.nvidia.com',
+        ntmPe: '45.2x',
+        earnings: [
+            { date: '2024 Q1', link: '#' },
+            { date: '2023 Q4', link: '#' }
+        ],
+        news: [
+            { title: 'Blackwell 아키텍처 기반의 차세대 AI 칩 발표', source: 'The Verge', date: '1시간 전' },
+            { title: '클라우드 서비스 제공업체들의 GPU 수요 폭증', source: 'WSJ', date: '4시간 전' }
+        ],
+        financials: {
+            years: ['2020', '2021', '2022', '2023', '2024'],
+            revenue: ['10.9B', '16.7B', '26.9B', '27.0B', '60.9B'],
+            netIncome: ['2.8B', '4.3B', '9.7B', '4.4B', '29.7B'],
+            eps: ['1.13', '1.73', '3.85', '1.74', '11.93']
+        },
+        chartData: [300, 350, 420, 410, 480, 510, 522.53]
     }
 };
+
+let stockChart = null;
+let currentTicker = 'AAPL';
 
 document.addEventListener('DOMContentLoaded', () => {
     const searchBtn = document.getElementById('search-btn');
     const tickerInput = document.getElementById('ticker-input');
-    const resultSection = document.getElementById('result-section');
+    const headerTickerInput = document.getElementById('header-ticker-input');
+    const heroSection = document.getElementById('hero-section');
+    const dashboardSection = document.getElementById('dashboard-section');
+    const headerSearch = document.getElementById('header-search');
     const themeToggle = document.getElementById('theme-toggle');
     const body = document.body;
 
-    // Theme Toggle Logic
+    // Detect current page
+    const isMainPage = !!document.getElementById('hero-section');
+    const isChartPage = window.location.pathname.includes('chart-detail.html');
+    const isEarningsPage = window.location.pathname.includes('earnings-detail.html');
+
+    // Handle initial state for detail pages
+    if (!isMainPage) {
+        const urlParams = new URLSearchParams(window.location.search);
+        currentTicker = urlParams.get('ticker') || 'AAPL';
+        renderDetailView(currentTicker);
+    }
+
     themeToggle.addEventListener('click', () => {
         body.classList.toggle('light-theme');
         body.classList.toggle('dark-theme');
         const isDark = body.classList.contains('dark-theme');
         themeToggle.querySelector('.theme-icon').textContent = isDark ? '🌙' : '☀️';
+        if (stockChart) updateChartTheme();
     });
 
-    const handleSearch = () => {
-        const ticker = tickerInput.value.trim().toUpperCase();
-        if (!ticker) {
-            alert('티커를 입력해 주세요.');
+    const handleSearch = (input) => {
+        const ticker = input.value.trim().toUpperCase();
+        if (!ticker) return;
+
+        if (!isMainPage) {
+            window.location.href = `index.html?ticker=${ticker}`;
             return;
         }
 
-        // Show loading state (simple)
-        searchBtn.disabled = true;
-        searchBtn.textContent = '분석 중...';
+        currentTicker = ticker;
+        heroSection.classList.add('hidden');
+        dashboardSection.classList.remove('hidden');
+        headerSearch.classList.remove('hidden');
 
-        setTimeout(() => {
-            renderResult(ticker);
-            searchBtn.disabled = false;
-            searchBtn.textContent = '분석하기';
-        }, 1200);
+        renderDashboard(ticker);
     };
 
-    searchBtn.addEventListener('click', handleSearch);
-    tickerInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSearch();
-    });
+    if (searchBtn) {
+        searchBtn.addEventListener('click', () => handleSearch(tickerInput));
+        tickerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch(tickerInput);
+        });
+    }
 
-    function renderResult(ticker) {
-        const data = MOCK_DATA[ticker] || {
-            name: ticker,
-            price: 'N/A',
-            sentiment: 'Unknown',
-            summary: `현재 ${ticker}에 대한 상세 데이터가 시스템에 등록되어 있지 않습니다. 실시간 분석 모드로 전환 중입니다...`,
-            risks: ['데이터 부족'],
-            growth: ['데이터 업데이트 필요']
-        };
+    if (headerTickerInput) {
+        headerTickerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch(headerTickerInput);
+        });
+    }
 
-        resultSection.innerHTML = `
-            <div class="result-card" style="animation: fadeInUp 0.6s ease-out">
-                <div class="result-header">
-                    <div>
-                        <h2 class="ticker-name">${data.name} <span class="ticker-code">(${ticker})</span></h2>
-                        <p class="current-price">$${data.price}</p>
-                    </div>
-                    <div class="sentiment-badge ${data.sentiment.toLowerCase().replace(' ', '-')}">
-                        ${data.sentiment}
-                    </div>
+    // Dashboard Interaction
+    function setupDashboardInteractions(ticker) {
+        const chartCard = document.getElementById('chart-card');
+        const earningsCard = document.getElementById('earnings-card');
+
+        if (chartCard) {
+            chartCard.onclick = () => window.location.href = `chart-detail.html?ticker=${ticker}`;
+        }
+        if (earningsCard) {
+            earningsCard.onclick = () => window.location.href = `earnings-detail.html?ticker=${ticker}`;
+        }
+    }
+
+    async function renderDashboard(ticker) {
+        let stockData = null;
+
+        try {
+            const response = await fetch(`/api/historical?ticker=${ticker}`);
+            if (response.ok) {
+                stockData = await response.json();
+                console.log('FinanceDataReader Data Fetched:', stockData);
+            }
+        } catch (e) {
+            console.warn('Backend Fetch failed, falling back to mock data', e);
+        }
+
+        const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
+        const displayPrice = stockData?.current_price ? `$${parseFloat(stockData.current_price).toLocaleString()}` : (mock.price ? `$${mock.price}` : 'Data pending...');
+        const changeVal = stockData?.change !== undefined ? parseFloat(stockData.change) : 0;
+        const changePct = stockData?.change_percent !== undefined ? stockData.change_percent : 'Live';
+
+        document.getElementById('company-info').innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div>
+                    <h2 class="ticker-name">${mock.name} <span class="ticker-code">(${ticker})</span></h2>
+                    <div style="font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; color: var(--accent);">${displayPrice}</div>
                 </div>
-
-                <div class="analysis-grid">
-                    <div class="analysis-box summary-box">
-                        <h3>AI 총평</h3>
-                        <p>${data.summary}</p>
-                    </div>
-                    
-                    <div class="analysis-box">
-                        <h3>주요 리스크</h3>
-                        <ul>
-                            ${data.risks.map(r => `<li>${r}</li>`).join('')}
-                        </ul>
-                    </div>
-
-                    <div class="analysis-box">
-                        <h3>성장 모멘텀</h3>
-                        <ul>
-                            ${data.growth.map(g => `<li>${g}</li>`).join('')}
-                        </ul>
-                    </div>
+                <div class="sentiment-badge ${changeVal >= 0 ? 'strongly-positive' : 'negative'}">
+                    ${changeVal > 0 ? '+' : ''}${changePct}%
                 </div>
+            </div>
+            <p style="margin-top: 1rem;">${mock.desc || '기업 설명을 준비 중입니다.'}</p>
+            <div class="overview-details">
+                <div class="detail-item"><span class="detail-label">시가총액</span><span class="detail-value">${mock.marketCap || '-'}</span></div>
+                <div class="detail-item"><span class="detail-label">섹터</span><span class="detail-value">${mock.sector || '-'}</span></div>
+                <div class="detail-item"><span class="detail-label">IR 웹사이트</span><span class="detail-value"><a href="${mock.irWeb || '#'}" class="ir-link" target="_blank">방문하기</a></span></div>
+                <div class="detail-item"><span class="detail-label">NTM P/E</span><span class="detail-value">${mock.ntmPe || '-'}</span></div>
             </div>
         `;
 
-        resultSection.classList.remove('hidden');
-        resultSection.scrollIntoView({ behavior: 'smooth' });
+        const earningsHTML = (mock.earnings || []).map(e => `
+            <li>
+                <span class="earnings-date">${e.date} Transcript</span>
+                <a href="${e.link}" class="ir-link">View</a>
+            </li>
+        `).join('') || '<li>어닝콜 정보를 불러올 수 없습니다.</li>';
+        document.getElementById('earnings-list').innerHTML = earningsHTML;
+
+        const newsHTML = (mock.news || []).map(n => `
+            <div class="news-item">
+                <div class="news-title">${n.title}</div>
+                <div class="news-meta">${n.source} • ${n.date}</div>
+            </div>
+        `).join('') || '<p>최신 뉴스가 없습니다.</p>';
+        document.getElementById('news-grid').innerHTML = newsHTML;
+
+        const f = mock.financials || { years: [], revenue: [], netIncome: [], eps: [] };
+        let tableHtml = `
+            <thead>
+                <tr>
+                    <th>항목 (Annual)</th>
+                    ${f.years.map(y => `<th>${y}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Revenue (매출)</td>${f.revenue.map(v => `<td>${v}</td>`).join('')}</tr>
+                <tr><td>Net Income (순이익)</td>${f.netIncome.map(v => `<td>${v}</td>`).join('')}</tr>
+                <tr><td>EPS (주당순이익)</td>${f.eps.map(v => `<td>${v}</td>`).join('')}</tr>
+            </tbody>
+        `;
+        document.getElementById('financials-table').innerHTML = tableHtml;
+
+        if (stockData && stockData.prices) {
+            renderChart(stockData.prices, stockData.labels);
+        } else {
+            renderChart(mock.chartData || [0, 0, 0, 0, 0, 0, 0], ['-', '-', '-', '-', '-', '-', '-']);
+        }
+
+        setupDashboardInteractions(ticker);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function renderDetailView(ticker) {
+        const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
+        if (isChartPage) {
+            try {
+                const res = await fetch(`/api/historical?ticker=${ticker}`);
+                const data = await res.json();
+                renderChart(data.prices, data.labels);
+            } catch (e) {
+                renderChart(mock.chartData, ['-', '-', '-', '-', '-', '-', '-']);
+            }
+        } else if (isEarningsPage) {
+            document.getElementById('earnings-list').innerHTML = (mock.earnings || []).map(e => `
+                <li>
+                    <span class="earnings-date">${e.date} Transcript</span>
+                    <a href="${e.link}" class="ir-link">View</a>
+                </li>
+            `).join('');
+            if (mock.earnings && mock.earnings[0]) {
+                document.getElementById('last-earnings-date').innerText = mock.earnings[0].date;
+            }
+        }
+    }
+
+    function renderChart(prices, labels) {
+        const chartElement = document.getElementById('stock-chart');
+        if (!chartElement) return;
+
+        const ctx = chartElement.getContext('2d');
+        if (stockChart) stockChart.destroy();
+
+        const isDark = body.classList.contains('dark-theme');
+        const color = isDark ? '#818cf8' : '#4f46e5';
+
+        stockChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '주가 (USD)',
+                    data: prices,
+                    borderColor: color,
+                    backgroundColor: 'rgba(129, 140, 248, 0.1)',
+                    fill: true,
+                    tension: 0.2,
+                    pointRadius: (prices && prices.length > 30) ? 0 : 4,
+                    pointBackgroundColor: color
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: isDark ? '#94a3b8' : '#64748b' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            color: isDark ? '#94a3b8' : '#64748b',
+                            maxTicksLimit: 10
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateChartTheme() {
+        const isDark = body.classList.contains('dark-theme');
+        const color = isDark ? '#818cf8' : '#4f46e5';
+        if (stockChart) {
+            stockChart.data.datasets[0].borderColor = color;
+            stockChart.data.datasets[0].pointBackgroundColor = color;
+            stockChart.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
+            stockChart.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
+            stockChart.update();
+        }
     }
 });

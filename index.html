@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +8,12 @@
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
+        rel="stylesheet">
     <script src="main.js" defer></script>
 </head>
+
 <body class="dark-theme">
     <div class="background-blobs">
         <div class="blob blob-1"></div>
@@ -23,6 +27,9 @@
                 <span class="gradient-text">InSight AI</span>
             </div>
             <div class="nav-links">
+                <div class="header-search hidden" id="header-search">
+                    <input type="text" id="header-ticker-input" placeholder="티커 입력...">
+                </div>
                 <button id="theme-toggle" class="icon-btn">
                     <span class="theme-icon">🌙</span>
                 </button>
@@ -31,23 +38,65 @@
     </header>
 
     <main>
-        <section class="hero-section">
+        <section id="hero-section" class="hero-section">
             <h1 class="hero-title">기업의 미래를 <span class="gradient-text">AI로 분석</span>하세요</h1>
             <p class="hero-subtitle">티커를 입력하면 실시간 데이터와 AI가 결합된 심층 리포트를 제공합니다.</p>
-            
+
             <div class="search-container">
                 <input type="text" id="ticker-input" placeholder="예: AAPL, TSLA, NVDA" autocomplete="off">
                 <button id="search-btn">분석하기</button>
             </div>
         </section>
 
-        <section id="result-section" class="result-section hidden">
-            <!-- AI 분석 결과가 여기에 동적으로 렌더링됩니다 -->
+        <section id="dashboard-section" class="dashboard-section hidden">
+            <!-- Top: Large Chart -->
+            <div id="chart-card" class="chart-container card interactive-card">
+                <h3>주가 차트</h3>
+                <div class="chart-wrapper">
+                    <canvas id="stock-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Middle Left: Company Overview -->
+                <div class="overview-card card">
+                    <h3>기업 개요</h3>
+                    <div id="company-info">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+
+                <!-- Middle Right: Earnings Calls -->
+                <div id="earnings-card" class="earnings-card card interactive-card">
+                    <h3>어닝콜 모음</h3>
+                    <ul id="earnings-list">
+                        <!-- Dynamic content -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Bottom: News Section -->
+            <div class="news-section card">
+                <h3>주요 뉴스</h3>
+                <div id="news-grid" class="news-grid">
+                    <!-- Dynamic content -->
+                </div>
+            </div>
+
+            <!-- Bottom: Financial Highlights -->
+            <div class="financials-section card">
+                <h3>5개년 연간 Financial Highlight</h3>
+                <div class="table-wrapper">
+                    <table id="financials-table">
+                        <!-- Dynamic content -->
+                    </table>
+                </div>
+            </div>
         </section>
     </main>
 
-    <footer>
-        <p>&copy; 2026 InSight AI. All rights reserved.</p>
-    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="main.js" defer></script>
 </body>
+
 </html>

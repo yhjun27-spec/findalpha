@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주가 상세 분석 - InSight AI</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="main.js" defer></script>
+</head>
+
+<body class="dark-theme">
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <header>
+        <nav>
+            <div class="logo">
+                <a href="index.html" class="ir-link"
+                    style="font-size: 1.5rem; font-weight: 700; background: var(--primary-gradient); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">InSight
+                    AI</a>
+            </div>
+            <button onclick="window.location.href='index.html'" class="icon-btn">대시보드로 돌아가기</button>
+        </nav>
+    </header>
+
+    <main class="dashboard-section">
+        <div class="chart-container card" style="height: 80vh;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 id="detail-ticker-title" class="ticker-name">기다려 주세요...</h1>
+                <div class="sentiment-badge strongly-positive">Chart Analysis</div>
+            </div>
+            <div class="chart-wrapper" style="height: calc(100% - 100px);">
+                <canvas id="stock-chart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>차트 상세 분석 (AI)</h3>
+            <p id="chart-ai-analysis">포맷 구성 중입니다. 다음 단계에서 상세 분석 내용이 업데이트될 예정입니다.</p>
+        </div>
+    </main>
+
+    <script>
+        // detail page specialized logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ticker = urlParams.get('ticker');
+            if (ticker) {
+                document.getElementById('detail-ticker-title').innerText = ticker + ' 주가 차트 상세';
+            }
+        });
+    </script>
+</body>
+
+</html>

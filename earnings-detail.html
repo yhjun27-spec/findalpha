@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>어닝콜 상세 분석 - InSight AI</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
+        rel="stylesheet">
+    <script src="main.js" defer></script>
+</head>
+
+<body class="dark-theme">
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <header>
+        <nav>
+            <div class="logo">
+                <a href="index.html" class="ir-link"
+                    style="font-size: 1.5rem; font-weight: 700; background: var(--primary-gradient); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">InSight
+                    AI</a>
+            </div>
+            <button onclick="window.location.href='index.html'" class="icon-btn">대시보드로 돌아가기</button>
+        </nav>
+    </header>
+
+    <main class="dashboard-section">
+        <div class="card">
+            <h1 id="detail-ticker-title" class="ticker-name" style="margin-bottom: 1rem;">기다려 주세요...</h1>
+            <h3>AI 어닝콜 통합 분석</h3>
+            <div id="earnings-analysis-content" style="margin-top: 2rem; line-height: 2;">
+                <p>포맷 구성 중입니다. 다음 단계에서 상세 어닝콜 분석 내용이 업데이트될 예정입니다.</p>
+                <div class="overview-details" style="grid-template-columns: 1fr; margin-top: 2rem;">
+                    <div class="detail-item">
+                        <span class="detail-label">최근 어닝콜 일자</span>
+                        <span class="detail-value" id="last-earnings-date">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>과거 어닝콜 리포트</h3>
+            <ul id="earnings-list">
+                <!-- Data populated by main.js -->
+            </ul>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ticker = urlParams.get('ticker');
+            if (ticker) {
+                document.getElementById('detail-ticker-title').innerText = ticker + ' 어닝콜 분석';
+            }
+        });
+    </script>
+</body>
+
+</html>
