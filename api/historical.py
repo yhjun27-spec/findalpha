@@ -18,6 +18,8 @@ class handler(BaseHTTPRequestHandler):
             start_date = (today - timedelta(days=30)).strftime('%Y-%m-%d')
         elif date_range == '3m':
             start_date = (today - timedelta(days=90)).strftime('%Y-%m-%d')
+        elif date_range == '6m':
+            start_date = (today - timedelta(days=180)).strftime('%Y-%m-%d')
         elif date_range == '5y':
             start_date = (today - timedelta(days=365*5)).strftime('%Y-%m-%d')
         elif date_range == 'max':

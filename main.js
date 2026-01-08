@@ -185,16 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const changePct = stockData?.change_percent !== undefined ? stockData.change_percent : 'Live';
 
         document.getElementById('company-info').innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
-                    <h2 class="ticker-name">${mock.name} <span class="ticker-code">(${ticker})</span></h2>
-                    <div style="font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; color: var(--accent);">${displayPrice}</div>
+                    <h2 class="ticker-name" style="margin-bottom: 0.25rem;">${mock.name} <span class="ticker-code">(${ticker})</span></h2>
+                    <div class="current-price-display" style="font-size: 3rem; font-weight: 800; color: var(--text-main); letter-spacing: -0.02em;">${displayPrice}</div>
                 </div>
-                <div class="sentiment-badge ${changeVal >= 0 ? 'strongly-positive' : 'negative'}">
-                    ${changeVal > 0 ? '+' : ''}${changePct}%
+                <div class="sentiment-badge ${changeVal >= 0 ? 'strongly-positive' : 'negative'}" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">
+                    ${changeVal > 0 ? '▲' : '▼'} ${Math.abs(changeVal).toLocaleString()} (${changePct}%)
                 </div>
             </div>
-            <p style="margin-top: 1rem;">${mock.desc || '기업 설명을 준비 중입니다.'}</p>
+            <p style="margin-top: 1.5rem; color: var(--text-muted); font-size: 1.05rem; line-height: 1.7;">${mock.desc || '기업 설명을 준비 중입니다.'}</p>
             <div class="overview-details">
                 <div class="detail-item"><span class="detail-label">시가총액</span><span class="detail-value">${mock.marketCap || '-'}</span></div>
                 <div class="detail-item"><span class="detail-label">섹터</span><span class="detail-value">${mock.sector || '-'}</span></div>
