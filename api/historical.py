@@ -7,10 +7,19 @@ from datetime import datetime, timedelta
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        query_components = parse_qs(urlparse(self.path).query)
-        ticker = query_components.get('ticker', ['AAPL'])[0]
-        date_range = query_components.get('range', ['1y'])[0] # 1m, 3m, 1y, 5y, max
-        interval = query_components.get('interval', ['d'])[0] # d, w, m
+        try:
+            query_components = parse_qs(urlparse(self.path).query)
+            ticker = query_components.get('ticker', ['AAPL'])[0]
+            date_range = query_components.get('range', ['1y'])[0] # 1m, 3m, 1y, 5y, max
+            interval = query_components.get('interval', ['d'])[0] # d, w, m
+            
+            # CORS Headers
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type')
+            self.end_headers()
         
         # Calculate start date
         today = datetime.now()
@@ -84,14 +93,25 @@ class handler(BaseHTTPRequestHandler):
                 "ohlc": ohlc_data
             }
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
+            chart_data = {
+                "ticker": ticker,
+                "range": date_range,
+                "interval": interval,
+                "current_price": current_price,
+                "change": change,
+                "change_percent": round(change_percent, 2),
+                "labels": resampled_df.index.strftime('%Y-%m-%d').tolist(),
+                "prices": resampled_df['Close'].tolist(),
+                "ohlc": ohlc_data
+            }
+            
             self.wfile.write(json.dumps(chart_data).encode('utf-8'))
             
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
+            # If headers are not sent yet, send 500. 
+            # But since we send headers early for CORS, we might just write the error json.
+            # However, standard http.server doesn't support changing status code after headers.
+            # Ideally with Vercel functions this handler logic is slightly adapted, 
+            # but for standard BaseHTTPRequestHandler we just write the error.
             self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
         return

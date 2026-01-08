@@ -253,6 +253,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderChart(data.prices, data.labels, data.ohlc);
             } catch (e) {
                 console.error('Detail view fetch failed', e);
+                if (titleEl) titleEl.innerText = `${ticker} 데이터 로드 실패`;
+                const chartElement = document.getElementById('stock-chart');
+                if (chartElement) {
+                    const ctx = chartElement.getContext('2d');
+                    ctx.font = '16px "Outfit"';
+                    ctx.fillStyle = '#ef4444';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('데이터를 불러오는 중 오류가 발생했습니다.', chartElement.width / 2, chartElement.height / 2);
+                }
             }
         } else if (isEarningsPage) {
             document.getElementById('earnings-list').innerHTML = (mock.earnings || []).map(e => `
