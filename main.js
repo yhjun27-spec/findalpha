@@ -241,26 +241,57 @@ document.addEventListener('DOMContentLoaded', () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    function generateMockOHLC(prices) {
+        return prices.map((price, i) => {
+            const volatility = price * 0.02;
+            const open = price + (Math.random() - 0.5) * volatility;
+            const close = price;
+            const high = Math.max(open, close) + Math.random() * volatility;
+            const low = Math.min(open, close) - Math.random() * volatility;
+            // Generate dates going back from today
+            const date = luxon.DateTime.now().minus({ days: prices.length - 1 - i }).toISODate();
+            return { x: date, o: open, h: high, l: low, c: close };
+        });
+    }
+
     async function renderDetailView(ticker) {
         const mock = MOCK_DATA[ticker] || MOCK_DATA['AAPL'];
         const titleEl = document.getElementById('detail-ticker-title');
         if (titleEl) titleEl.innerText = `${ticker} 주가 차트 상세`;
 
         if (isChartPage) {
+            let ohlcData = null;
+            let chartPrices = mock.chartData || [];
+            let chartLabels = [];
+
             try {
                 const res = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
+                if (!res.ok) throw new Error(`API Error ${res.status}`);
                 const data = await res.json();
-                renderChart(data.prices, data.labels, data.ohlc);
+                ohlcData = data.ohlc;
+                chartPrices = data.prices;
+                chartLabels = data.labels;
             } catch (e) {
-                console.error('Detail view fetch failed', e);
-                if (titleEl) titleEl.innerText = `${ticker} 데이터 로드 실패`;
+                console.warn('Detail view fetch failed, switching to mock data', e);
+                if (titleEl) titleEl.innerHTML = `${ticker} 주가 차트 상세 <span style="font-size:0.8rem; color:#ef4444; background:rgba(239,68,68,0.1); padding:2px 8px; border-radius:4px;">(Live Data Unavailable)</span>`;
+
+                // Fallback: Generate OHLC from mock prices
+                if (!ohlcData && chartPrices.length > 0) {
+                    ohlcData = generateMockOHLC(chartPrices);
+                    // Generate daily labels
+                    chartLabels = ohlcData.map(d => d.x);
+                }
+            }
+
+            if (ohlcData) {
+                renderChart(chartPrices, chartLabels, ohlcData);
+            } else {
+                // Last resort if even mock data is missing
                 const chartElement = document.getElementById('stock-chart');
                 if (chartElement) {
                     const ctx = chartElement.getContext('2d');
-                    ctx.font = '16px "Outfit"';
-                    ctx.fillStyle = '#ef4444';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('데이터를 불러오는 중 오류가 발생했습니다.', chartElement.width / 2, chartElement.height / 2);
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.fillText('데이터가 없습니다.', chartElement.width / 2, chartElement.height / 2);
                 }
             }
         } else if (isEarningsPage) {
