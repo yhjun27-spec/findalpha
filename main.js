@@ -43,6 +43,10 @@ const MOCK_DATA = {
     }
 };
 
+// API Base URL (Local Development)
+const API_BASE_URL = 'http://localhost:5002/api';
+// const API_BASE_URL = '/api'; // For Production (Vercel)
+
 let stockChart = null;
 let currentTicker = 'AAPL';
 let currentRange = '1y';
@@ -167,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let stockData = null;
 
         try {
-            const response = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
+            const response = await fetch(`${API_BASE_URL}/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
             if (response.ok) {
                 stockData = await response.json();
             }
@@ -265,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let chartLabels = [];
 
             try {
-                const res = await fetch(`/api/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
+                const res = await fetch(`${API_BASE_URL}/historical?ticker=${ticker}&range=${currentRange}&interval=${currentInterval}`);
                 if (!res.ok) throw new Error(`API Error ${res.status}`);
                 const data = await res.json();
                 ohlcData = data.ohlc;
@@ -316,12 +320,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stockChart) stockChart.destroy();
 
         if (typeof Chart !== 'undefined' && Chart.register) {
-            // Register financial components if they exist in global scope (UMD)
-            const financial = window['chartjs-chart-financial'];
+            // Debugging: Log available window keys to find the plugin
+            console.log('Window keys check:', Object.keys(window).filter(k => k.includes('Chart') || k.includes('Candle')));
+
+            // Try 1: Standard UMD Global
+            let financial = window['chartjs-chart-financial'];
+
+            // Try 2: Alternative UMD Global used by some CDNs
+            if (!financial && window.Chart && window.Chart.Financial) {
+                financial = window.Chart.Financial;
+            }
+
             if (financial) {
-                Chart.register(financial.CandlestickController, financial.CandlestickElement, financial.OhlcController, financial.OhlcElement);
+                // Register Components
+                if (financial.CandlestickController) Chart.register(financial.CandlestickController);
+                if (financial.CandlestickElement) Chart.register(financial.CandlestickElement);
+                if (financial.OhlcController) Chart.register(financial.OhlcController);
+                if (financial.OhlcElement) Chart.register(financial.OhlcElement);
+                console.log('Registered financial components from object:', financial);
             } else if (typeof CandlestickController !== 'undefined') {
-                Chart.register(CandlestickController, CandlestickElement);
+                // Try 3: Direct Global Classes (sometimes exposed directly)
+                console.log('Registering Financial Plugin via global classes');
+                Chart.register(CandlestickController, CandlestickElement, OhlcController, OhlcElement);
+            } else {
+                console.warn('CRITICAL: Chart.js Financial Plugin NOT found. Chart type "candlestick" will fail.');
             }
         }
 

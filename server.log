@@ -1,0 +1,17 @@
+Starting Flask API Server on port 5002...
+ * Serving Flask app 'server'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5002
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [09/Jan/2026 09:58:58] "GET /api/historical?ticker=AAPL HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:06:26] "GET /api/historical?ticker=AAPL&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:11:37] "GET /api/historical?ticker=AAPL&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:12:08] "GET /api/historical?ticker=AAPL HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:12:27] "GET /api/historical?ticker=AAPL&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:13:26] "GET /api/historical?ticker=AAPL&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:14:44] "GET /api/historical?ticker=AAPL&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:24:55] "GET /api/historical?ticker=HIMS&range=1y&interval=d HTTP/1.1" 200 -
+127.0.0.1 - - [09/Jan/2026 10:25:00] "GET /api/historical?ticker=HIMS&range=5y&interval=d HTTP/1.1" 200 -
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-ibhgufgv'}
+  warnings.warn(
