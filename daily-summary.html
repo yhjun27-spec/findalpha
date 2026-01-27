@@ -13,10 +13,8 @@
         rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-    <script
-        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <!-- TradingView Lightweight Charts for better cross-browser candlestick support -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 
 <body class="dark-theme">
@@ -93,9 +91,9 @@
                 </div>
             </div>
 
-            <!-- 캔들스틱 차트 -->
+            <!-- 캔들스틱 차트 (Lightweight Charts) -->
             <div class="market-chart-container">
-                <canvas id="market-index-chart"></canvas>
+                <div id="market-index-chart" style="width: 100%; height: 400px;"></div>
             </div>
         </section>
 
@@ -364,190 +362,117 @@
             }
         }
 
-        function renderMarketChart(ctx, ohlcData, volumeData, ma10Data, ma20Data, title) {
-            if (marketChart) marketChart.destroy();
+        function renderMarketChart(container, ohlcData, volumeData, ma10Data, ma20Data, title) {
+            // 기존 차트 제거
+            container.innerHTML = '';
 
             const isDark = body.classList.contains('dark-theme');
-            const textColor = isDark ? '#94a3b8' : '#64748b';
-            const gridColor = isDark ? '#334155' : '#e2e8f0';
 
-            // 날짜 레이블 생성 (거래일만)
-            const labels = ohlcData.map(d => {
-                const date = new Date(d.x);
-                return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
-            });
-
-            // OHLC 데이터를 인덱스 기반으로 변환
-            const ohlcIndexed = ohlcData.map((d, i) => ({
-                x: i,
-                o: d.o,
-                h: d.h,
-                l: d.l,
-                c: d.c
-            }));
-
-            // 볼륨 데이터를 인덱스 기반으로 변환
-            const volumeIndexed = volumeData.map((d, i) => ({
-                x: i,
-                y: d.y,
-                color: i > 0 && ohlcData[i] && ohlcData[i - 1]
-                    ? (ohlcData[i].c >= ohlcData[i - 1].c ? '#22c55e' : '#ef4444')
-                    : '#94a3b8'
-            }));
-
-            // MA 데이터를 인덱스 기반으로 변환
-            const ma10Indexed = ma10Data.map((d, i) => ({ x: i, y: d.y }));
-            const ma20Indexed = ma20Data.map((d, i) => ({ x: i, y: d.y }));
-
-            // 볼륨 최대값 계산
-            const maxVolume = Math.max(...volumeIndexed.map(d => d.y || 0), 1);
-
-            const datasets = [
-                {
-                    label: title,
-                    data: ohlcIndexed,
-                    type: 'candlestick',
-                    color: {
-                        up: '#22c55e',
-                        down: '#ef4444',
-                        unchanged: '#94a3b8'
-                    },
-                    borderColor: isDark ? '#ffffff33' : '#0000001a',
-                    yAxisID: 'y',
-                    barThickness: 8
-                }
-            ];
-
-            // Add MAs
-            if (ma10Indexed.length > 0) {
-                datasets.push({
-                    label: 'MA10',
-                    type: 'line',
-                    data: ma10Indexed,
-                    borderColor: '#f59e0b',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0.1,
-                    yAxisID: 'y'
-                });
-            }
-            if (ma20Indexed.length > 0) {
-                datasets.push({
-                    label: 'MA20',
-                    type: 'line',
-                    data: ma20Indexed,
-                    borderColor: '#3b82f6',
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    fill: false,
-                    tension: 0.1,
-                    yAxisID: 'y'
-                });
-            }
-
-            // Add volume
-            if (volumeIndexed.length > 0) {
-                datasets.push({
-                    label: '거래량',
-                    type: 'bar',
-                    data: volumeIndexed.map(d => ({ x: d.x, y: d.y })),
-                    backgroundColor: volumeIndexed.map(d => d.color + '60'),
-                    borderColor: volumeIndexed.map(d => d.color),
-                    borderWidth: 0,
-                    yAxisID: 'volume',
-                    barPercentage: 0.8,
-                    categoryPercentage: 1
-                });
-            }
-
-            marketChart = new Chart(ctx, {
-                type: 'candlestick',
-                data: {
-                    labels: labels,
-                    datasets
+            // Lightweight Charts 생성
+            const chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: 400,
+                layout: {
+                    background: { type: 'solid', color: isDark ? '#0f172a' : '#ffffff' },
+                    textColor: isDark ? '#94a3b8' : '#64748b'
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                color: textColor,
-                                usePointStyle: true,
-                                padding: 15,
-                                font: { size: 11 }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                title: (items) => {
-                                    if (items.length > 0) {
-                                        return labels[items[0].dataIndex] || '';
-                                    }
-                                    return '';
-                                },
-                                label: (context) => {
-                                    const d = context.raw;
-                                    if (context.dataset.type === 'candlestick') {
-                                        return [
-                                            `시가: ${d.o?.toLocaleString() || '-'}`,
-                                            `고가: ${d.h?.toLocaleString() || '-'}`,
-                                            `저가: ${d.l?.toLocaleString() || '-'}`,
-                                            `종가: ${d.c?.toLocaleString() || '-'}`
-                                        ];
-                                    }
-                                    if (context.dataset.label === '거래량') {
-                                        const val = d.y || d;
-                                        if (val >= 1e9) return `거래량: ${(val / 1e9).toFixed(2)}B`;
-                                        if (val >= 1e6) return `거래량: ${(val / 1e6).toFixed(2)}M`;
-                                        if (val >= 1e3) return `거래량: ${(val / 1e3).toFixed(2)}K`;
-                                        return `거래량: ${val.toLocaleString()}`;
-                                    }
-                                    return `${context.dataset.label}: ${(d.y || d)?.toLocaleString()}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'category',
-                            grid: { color: gridColor, display: false },
-                            ticks: {
-                                color: textColor,
-                                maxTicksLimit: 8,
-                                maxRotation: 0,
-                                autoSkip: true
-                            }
-                        },
-                        y: {
-                            position: 'right',
-                            grid: { color: gridColor },
-                            ticks: {
-                                color: textColor,
-                                callback: function (value) {
-                                    if (value >= 1000) return value.toLocaleString();
-                                    return value;
-                                }
-                            }
-                        },
-                        volume: {
-                            position: 'left',
-                            grid: { display: false },
-                            ticks: { display: false },
-                            min: 0,
-                            max: maxVolume * 5,
-                            beginAtZero: true
-                        }
-                    }
+                grid: {
+                    vertLines: { color: isDark ? '#1e293b' : '#f1f5f9' },
+                    horzLines: { color: isDark ? '#1e293b' : '#f1f5f9' }
+                },
+                rightPriceScale: {
+                    borderColor: isDark ? '#334155' : '#e2e8f0'
+                },
+                timeScale: {
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    timeVisible: true,
+                    dayVisible: true
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal
                 }
             });
+
+            // 캔들스틱 시리즈
+            const candleSeries = chart.addCandlestickSeries({
+                upColor: '#22c55e',
+                downColor: '#ef4444',
+                borderUpColor: '#22c55e',
+                borderDownColor: '#ef4444',
+                wickUpColor: '#22c55e',
+                wickDownColor: '#ef4444'
+            });
+
+            // OHLC 데이터 변환 (Lightweight Charts 형식)
+            const candleData = ohlcData.map(d => ({
+                time: Math.floor(d.x / 1000), // Unix timestamp (seconds)
+                open: d.o,
+                high: d.h,
+                low: d.l,
+                close: d.c
+            }));
+            candleSeries.setData(candleData);
+
+            // MA10 라인
+            if (ma10Data.length > 0) {
+                const ma10Series = chart.addLineSeries({
+                    color: '#f59e0b',
+                    lineWidth: 2,
+                    title: 'MA10'
+                });
+                const ma10Formatted = ma10Data.map(d => ({
+                    time: Math.floor(d.x / 1000),
+                    value: d.y
+                }));
+                ma10Series.setData(ma10Formatted);
+            }
+
+            // MA20 라인
+            if (ma20Data.length > 0) {
+                const ma20Series = chart.addLineSeries({
+                    color: '#3b82f6',
+                    lineWidth: 2,
+                    title: 'MA20'
+                });
+                const ma20Formatted = ma20Data.map(d => ({
+                    time: Math.floor(d.x / 1000),
+                    value: d.y
+                }));
+                ma20Series.setData(ma20Formatted);
+            }
+
+            // 볼륨 히스토그램
+            if (volumeData.length > 0) {
+                const volumeSeries = chart.addHistogramSeries({
+                    priceFormat: { type: 'volume' },
+                    priceScaleId: 'volume',
+                    scaleMargins: { top: 0.8, bottom: 0 }
+                });
+                const volumeFormatted = volumeData.map((d, i) => ({
+                    time: Math.floor(d.x / 1000),
+                    value: d.y,
+                    color: i > 0 && ohlcData[i] && ohlcData[i - 1]
+                        ? (ohlcData[i].c >= ohlcData[i - 1].c ? '#22c55e80' : '#ef444480')
+                        : '#94a3b880'
+                }));
+                volumeSeries.setData(volumeFormatted);
+            }
+
+            // 차트를 컨테이너 크기에 맞춤
+            chart.timeScale().fitContent();
+
+            // 윈도우 리사이즈 대응
+            const resizeObserver = new ResizeObserver(entries => {
+                const { width, height } = entries[0].contentRect;
+                chart.applyOptions({ width, height: 400 });
+            });
+            resizeObserver.observe(container);
+
+            // 차트 인스턴스 저장 (이전 차트 정리용)
+            if (marketChart && marketChart.remove) {
+                marketChart.remove();
+            }
+            marketChart = chart;
         }
 
         // 2. Sectors
@@ -770,8 +695,30 @@
 
         // 5. Market News
 
+        // 한국시간 오전 7시 자동 새로고침
+        function setupAutoRefresh() {
+            // 1분마다 시간 체크
+            setInterval(() => {
+                const now = new Date();
+                // UTC + 9 = KST (한국시간)
+                const kstHour = (now.getUTCHours() + 9) % 24;
+                const kstMinute = now.getUTCMinutes();
+
+                // 오전 7시 0분에 새로고침
+                if (kstHour === 7 && kstMinute === 0) {
+                    console.log('한국시간 07:00 - 페이지 새로고침');
+                    location.reload();
+                }
+            }, 60000); // 60초마다 체크
+
+            console.log('자동 새로고침 설정됨: 매일 한국시간 오전 7시');
+        }
+
         // Initialize
-        document.addEventListener('DOMContentLoaded', loadDailySummary);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDailySummary();
+            setupAutoRefresh();
+        });
     </script>
 </body>
 
