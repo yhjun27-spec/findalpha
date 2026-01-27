@@ -14,8 +14,8 @@
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
     <script
-        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.umd.js"></script>
-    <script src="main.js" defer></script>
+        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="main.js?v=11" defer></script>
 </head>
 
 <body class="dark-theme">
@@ -54,16 +54,69 @@
                         <button class="filter-btn" data-interval="w">주봉</button>
                         <button class="filter-btn" data-interval="m">월봉</button>
                     </div>
+                    <div class="filter-divider"></div>
+                    <div class="filter-group drawing-tools">
+                        <button id="btn-draw-line" class="filter-btn"
+                            style="display: flex; align-items: center; gap: 0.3rem;">
+                            ✏️ 직선
+                        </button>
+                        <button id="btn-clear-lines" class="filter-btn"
+                            style="display: flex; align-items: center; gap: 0.3rem;">
+                            🗑️ 지우기
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div class="chart-wrapper" style="flex: 1; min-height: 0;">
+            <div class="chart-wrapper" style="flex: 1; min-height: 0; position: relative;">
                 <canvas id="stock-chart"></canvas>
+                <canvas id="drawing-overlay"
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
             </div>
         </div>
 
         <div class="card">
             <h3>차트 상세 분석 (AI)</h3>
             <p id="chart-ai-analysis">포맷 구성 중입니다. 다음 단계에서 상세 분석 내용이 업데이트될 예정입니다.</p>
+        </div>
+
+        <!-- Trade Recording Section -->
+        <div class="card" id="trade-section">
+            <h3>📊 매매 기록</h3>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 1; min-width: 120px;">
+                    <label
+                        style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">수량</label>
+                    <input type="number" id="trade-quantity" placeholder="수량" min="1" value="1"
+                        style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main);">
+                </div>
+                <div style="flex: 1; min-width: 120px;">
+                    <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">가격
+                        ($)</label>
+                    <input type="number" id="trade-price" placeholder="가격" step="0.01"
+                        style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main);">
+                </div>
+                <div style="flex: 1; min-width: 140px;">
+                    <label
+                        style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">날짜</label>
+                    <input type="date" id="trade-date"
+                        style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main);">
+                </div>
+                <button id="btn-buy" class="filter-btn"
+                    style="background: #22c55e; color: white; padding: 0.6rem 1.5rem; font-weight: 600;">
+                    📈 매수
+                </button>
+                <button id="btn-sell" class="filter-btn"
+                    style="background: #ef4444; color: white; padding: 0.6rem 1.5rem; font-weight: 600;">
+                    📉 매도
+                </button>
+            </div>
+
+            <div id="trade-history" style="margin-top: 1rem;">
+                <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem;">거래 내역</h4>
+                <div id="trade-list" style="max-height: 200px; overflow-y: auto;">
+                    <p style="color: var(--text-muted); font-size: 0.85rem;">거래 내역이 없습니다.</p>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -75,6 +128,314 @@
             if (ticker) {
                 document.getElementById('detail-ticker-title').innerText = ticker + ' 주가 차트 상세';
             }
+
+            // Trade Recording Logic
+            const TRADES_KEY = 'insight_trades';
+
+            // Set default date to today
+            const tradeDateInput = document.getElementById('trade-date');
+            if (tradeDateInput) {
+                tradeDateInput.value = new Date().toISOString().split('T')[0];
+            }
+
+            // Load trades from localStorage
+            function getTrades() {
+                const data = localStorage.getItem(TRADES_KEY);
+                return data ? JSON.parse(data) : {};
+            }
+
+            // Save trades to localStorage
+            function saveTrades(trades) {
+                localStorage.setItem(TRADES_KEY, JSON.stringify(trades));
+            }
+
+            // Add a new trade
+            function addTrade(type) {
+                if (!ticker) return alert('티커가 없습니다.');
+
+                const quantity = parseFloat(document.getElementById('trade-quantity').value);
+                const price = parseFloat(document.getElementById('trade-price').value);
+                const date = document.getElementById('trade-date').value;
+
+                if (!quantity || quantity <= 0) return alert('수량을 입력하세요.');
+                if (!price || price <= 0) return alert('가격을 입력하세요.');
+                if (!date) return alert('날짜를 선택하세요.');
+
+                const trades = getTrades();
+                if (!trades[ticker]) trades[ticker] = [];
+
+                trades[ticker].push({
+                    type: type,
+                    quantity: quantity,
+                    price: price,
+                    date: date,
+                    timestamp: Date.now()
+                });
+
+                saveTrades(trades);
+                renderTradeHistory();
+
+                // Trigger chart refresh to show new trade marker
+                window.dispatchEvent(new CustomEvent('tradeAdded', { detail: { ticker, type, price, date } }));
+
+                // Reset form
+                document.getElementById('trade-quantity').value = 1;
+                document.getElementById('trade-price').value = '';
+            }
+
+            // Render trade history
+            function renderTradeHistory() {
+                const trades = getTrades();
+                const tickerTrades = trades[ticker] || [];
+                const tradeList = document.getElementById('trade-list');
+
+                if (tickerTrades.length === 0) {
+                    tradeList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">거래 내역이 없습니다.</p>';
+                    return;
+                }
+
+                // Sort by date (newest first)
+                const sorted = [...tickerTrades].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // Calculate summary
+                let totalBuyQty = 0, totalBuyCost = 0, totalSellQty = 0, totalSellRevenue = 0;
+                sorted.forEach(t => {
+                    if (t.type === 'buy') {
+                        totalBuyQty += t.quantity;
+                        totalBuyCost += t.quantity * t.price;
+                    } else {
+                        totalSellQty += t.quantity;
+                        totalSellRevenue += t.quantity * t.price;
+                    }
+                });
+                const avgBuyPrice = totalBuyQty > 0 ? (totalBuyCost / totalBuyQty).toFixed(2) : '-';
+                const holdingQty = totalBuyQty - totalSellQty;
+
+                let html = `
+                    <div style="background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.75rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                            <span>보유 수량: <b>${holdingQty}</b></span>
+                            <span>평균 매수가: <b>$${avgBuyPrice}</b></span>
+                            <span>총 투자: <b>$${totalBuyCost.toFixed(2)}</b></span>
+                        </div>
+                    </div>
+                    <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <th style="text-align: left; padding: 0.5rem;">날짜</th>
+                                <th style="text-align: center; padding: 0.5rem;">구분</th>
+                                <th style="text-align: right; padding: 0.5rem;">수량</th>
+                                <th style="text-align: right; padding: 0.5rem;">가격</th>
+                                <th style="text-align: right; padding: 0.5rem;">금액</th>
+                                <th style="text-align: center; padding: 0.5rem;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                sorted.forEach((t, idx) => {
+                    const isBuy = t.type === 'buy';
+                    const color = isBuy ? '#22c55e' : '#ef4444';
+                    const label = isBuy ? '매수' : '매도';
+                    const total = (t.quantity * t.price).toFixed(2);
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border-color);">
+                            <td style="padding: 0.5rem;">${t.date}</td>
+                            <td style="text-align: center; padding: 0.5rem; color: ${color}; font-weight: 600;">${label}</td>
+                            <td style="text-align: right; padding: 0.5rem;">${t.quantity}</td>
+                            <td style="text-align: right; padding: 0.5rem;">$${t.price.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 0.5rem;">$${total}</td>
+                            <td style="text-align: center; padding: 0.5rem;">
+                                <button onclick="deleteTrade(${t.timestamp})" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.8rem;">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table>';
+                tradeList.innerHTML = html;
+            }
+
+            // Delete a trade
+            window.deleteTrade = function (timestamp) {
+                if (!confirm('이 거래를 삭제할까요?')) return;
+                const trades = getTrades();
+                if (trades[ticker]) {
+                    trades[ticker] = trades[ticker].filter(t => t.timestamp !== timestamp);
+                    saveTrades(trades);
+                    renderTradeHistory();
+                }
+            };
+
+            // Button event listeners
+            document.getElementById('btn-buy')?.addEventListener('click', () => addTrade('buy'));
+            document.getElementById('btn-sell')?.addEventListener('click', () => addTrade('sell'));
+
+            // Initial render
+            renderTradeHistory();
+
+            // ==============================
+            // Line Drawing Feature
+            // ==============================
+            const LINES_KEY = 'insight_chart_lines';
+            let isDrawingMode = false;
+            let drawingStartPoint = null;
+            let drawnLines = [];
+
+            const stockChart = document.getElementById('stock-chart');
+            const overlayCanvas = document.getElementById('drawing-overlay');
+            const overlayCtx = overlayCanvas.getContext('2d');
+            const btnDrawLine = document.getElementById('btn-draw-line');
+            const btnClearLines = document.getElementById('btn-clear-lines');
+
+            // Load saved lines from localStorage
+            function loadLines() {
+                const data = localStorage.getItem(LINES_KEY);
+                if (data) {
+                    const allLines = JSON.parse(data);
+                    drawnLines = allLines[ticker] || [];
+                }
+            }
+
+            // Save lines to localStorage
+            function saveLines() {
+                const data = localStorage.getItem(LINES_KEY);
+                const allLines = data ? JSON.parse(data) : {};
+                allLines[ticker] = drawnLines;
+                localStorage.setItem(LINES_KEY, JSON.stringify(allLines));
+            }
+
+            // Resize overlay canvas to match stock chart
+            function resizeOverlay() {
+                const rect = stockChart.getBoundingClientRect();
+                overlayCanvas.width = rect.width;
+                overlayCanvas.height = rect.height;
+                redrawLines();
+            }
+
+            // Redraw all lines
+            function redrawLines() {
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+                drawnLines.forEach(line => {
+                    overlayCtx.beginPath();
+                    overlayCtx.moveTo(line.x1, line.y1);
+                    overlayCtx.lineTo(line.x2, line.y2);
+                    overlayCtx.strokeStyle = line.color || '#f59e0b';
+                    overlayCtx.lineWidth = 2;
+                    overlayCtx.setLineDash([]);
+                    overlayCtx.stroke();
+
+                    // Draw endpoints
+                    [{ x: line.x1, y: line.y1 }, { x: line.x2, y: line.y2 }].forEach(pt => {
+                        overlayCtx.beginPath();
+                        overlayCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                        overlayCtx.fillStyle = line.color || '#f59e0b';
+                        overlayCtx.fill();
+                    });
+                });
+
+                // Draw pending point if exists
+                if (drawingStartPoint) {
+                    overlayCtx.beginPath();
+                    overlayCtx.arc(drawingStartPoint.x, drawingStartPoint.y, 5, 0, Math.PI * 2);
+                    overlayCtx.fillStyle = '#22c55e';
+                    overlayCtx.fill();
+                    overlayCtx.strokeStyle = '#22c55e';
+                    overlayCtx.lineWidth = 2;
+                    overlayCtx.stroke();
+                }
+            }
+
+            // Toggle drawing mode
+            btnDrawLine.addEventListener('click', () => {
+                isDrawingMode = !isDrawingMode;
+                btnDrawLine.classList.toggle('active', isDrawingMode);
+                overlayCanvas.style.pointerEvents = isDrawingMode ? 'auto' : 'none';
+                stockChart.style.cursor = isDrawingMode ? 'crosshair' : 'default';
+
+                if (!isDrawingMode) {
+                    drawingStartPoint = null;
+                    redrawLines();
+                }
+            });
+
+            // Clear all lines
+            btnClearLines.addEventListener('click', () => {
+                if (drawnLines.length === 0) return;
+                if (!confirm('모든 직선을 삭제할까요?')) return;
+                drawnLines = [];
+                drawingStartPoint = null;
+                saveLines();
+                redrawLines();
+            });
+
+            // Handle click on overlay (drawing)
+            overlayCanvas.addEventListener('click', (e) => {
+                if (!isDrawingMode) return;
+
+                const rect = overlayCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                if (!drawingStartPoint) {
+                    // First click - set start point
+                    drawingStartPoint = { x, y };
+                    redrawLines();
+                } else {
+                    // Second click - draw line and continue from this point
+                    drawnLines.push({
+                        x1: drawingStartPoint.x,
+                        y1: drawingStartPoint.y,
+                        x2: x,
+                        y2: y,
+                        color: '#f59e0b',
+                        timestamp: Date.now()
+                    });
+                    // Continue drawing from this point (연속 직선)
+                    drawingStartPoint = { x, y };
+                    saveLines();
+                    redrawLines();
+                }
+            });
+
+            // Handle mouse move for preview line
+            overlayCanvas.addEventListener('mousemove', (e) => {
+                if (!isDrawingMode || !drawingStartPoint) return;
+
+                const rect = overlayCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                redrawLines();
+
+                // Draw preview line
+                overlayCtx.beginPath();
+                overlayCtx.moveTo(drawingStartPoint.x, drawingStartPoint.y);
+                overlayCtx.lineTo(x, y);
+                overlayCtx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+                overlayCtx.lineWidth = 2;
+                overlayCtx.setLineDash([5, 5]);
+                overlayCtx.stroke();
+                overlayCtx.setLineDash([]);
+            });
+
+            // Cancel drawing with Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && drawingStartPoint) {
+                    drawingStartPoint = null;
+                    redrawLines();
+                }
+            });
+
+            // Initialize
+            loadLines();
+            resizeOverlay();
+            window.addEventListener('resize', resizeOverlay);
+
+            // Redraw on chart update
+            const observer = new ResizeObserver(resizeOverlay);
+            observer.observe(stockChart);
         });
     </script>
 </body>

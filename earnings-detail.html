@@ -9,7 +9,143 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
         rel="stylesheet">
-    <script src="main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .earnings-file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: background 0.2s;
+        }
+
+        .earnings-file-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .earnings-file-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .earnings-file-period {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .earnings-file-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-analyze {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: opacity 0.2s;
+        }
+
+        .btn-analyze:hover {
+            opacity: 0.9;
+        }
+
+        .btn-analyze:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-download {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+
+        .btn-download:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #analysis-result {
+            margin-top: 2rem;
+            line-height: 1.8;
+        }
+
+        #analysis-result h2 {
+            color: var(--text-primary);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #analysis-result h3 {
+            color: var(--accent-cyan);
+            margin-top: 1.5rem;
+        }
+
+        #analysis-result ul,
+        #analysis-result ol {
+            padding-left: 1.5rem;
+        }
+
+        #analysis-result li {
+            margin-bottom: 0.5rem;
+        }
+
+        #analysis-result strong {
+            color: var(--accent-magenta);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .analysis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .analysis-period-badge {
+            background: var(--primary-gradient);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .no-files-message {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+    </style>
 </head>
 
 <body class="dark-theme">
@@ -30,36 +166,216 @@
     </header>
 
     <main class="dashboard-section">
+        <!-- 어닝콜 분석 결과 -->
         <div class="card">
-            <h1 id="detail-ticker-title" class="ticker-name" style="margin-bottom: 1rem;">기다려 주세요...</h1>
-            <h3>AI 어닝콜 통합 분석</h3>
-            <div id="earnings-analysis-content" style="margin-top: 2rem; line-height: 2;">
-                <p>포맷 구성 중입니다. 다음 단계에서 상세 어닝콜 분석 내용이 업데이트될 예정입니다.</p>
-                <div class="overview-details" style="grid-template-columns: 1fr; margin-top: 2rem;">
-                    <div class="detail-item">
-                        <span class="detail-label">최근 어닝콜 일자</span>
-                        <span class="detail-value" id="last-earnings-date">-</span>
-                    </div>
-                </div>
+            <div class="analysis-header">
+                <h1 id="detail-ticker-title" class="ticker-name">기다려 주세요...</h1>
+                <span id="analysis-period-badge" class="analysis-period-badge" style="display: none;"></span>
+            </div>
+            <h3>AI 어닝콜 분석 리포트</h3>
+            <div id="analysis-result">
+                <p class="no-files-message">분석할 어닝콜 파일을 아래에서 선택하세요.</p>
             </div>
         </div>
 
+        <!-- 어닝콜 파일 목록 -->
         <div class="card">
-            <h3>과거 어닝콜 리포트</h3>
-            <ul id="earnings-list">
-                <!-- Data populated by main.js -->
-            </ul>
+            <h3>📁 어닝콜 파일 목록</h3>
+            <div id="earnings-list">
+                <p class="no-files-message">로딩 중...</p>
+            </div>
         </div>
     </main>
 
     <script>
+        const ticker = new URLSearchParams(window.location.search).get('ticker') || 'AAPL';
+
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const ticker = urlParams.get('ticker');
-            if (ticker) {
-                document.getElementById('detail-ticker-title').innerText = ticker + ' 어닝콜 분석';
-            }
+            document.getElementById('detail-ticker-title').innerText = `${ticker} 어닝콜 분석`;
+            loadEarningsCallFiles();
         });
+
+        async function loadEarningsCallFiles() {
+            const listContainer = document.getElementById('earnings-list');
+
+            try {
+                const response = await fetch(`/api/earningcalls?ticker=${ticker}`);
+                const data = await response.json();
+
+                if (data.files && data.files.length > 0) {
+                    listContainer.innerHTML = data.files.map(file => `
+                        <div class="earnings-file-item">
+                            <div class="earnings-file-info">
+                                <span class="earnings-file-period">📄 ${file.date}</span>
+                            </div>
+                            <div class="earnings-file-actions">
+                                <button class="btn-analyze" onclick="analyzeEarningsCall('${file.filename}', '${file.date}')">
+                                    🤖 AI 분석
+                                </button>
+                                <a href="${file.link}" class="btn-download" target="_blank">
+                                    📥 PDF 보기
+                                </a>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    listContainer.innerHTML = `
+                        <div class="no-files-message">
+                            <p>📂 어닝콜 파일이 없습니다.</p>
+                            <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+                                <code>earningcall/${ticker}/</code> 폴더에 PDF 파일을 추가해주세요.<br>
+                                파일명 예시: <code>2024-Q4.pdf</code>, <code>2024-Q3.pdf</code>
+                            </p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading earnings call files:', error);
+                listContainer.innerHTML = `<p class="no-files-message">파일 목록을 불러오는데 실패했습니다.</p>`;
+            }
+        }
+
+        async function analyzeEarningsCall(filename, period, forceRefresh = false) {
+            const resultContainer = document.getElementById('analysis-result');
+            const periodBadge = document.getElementById('analysis-period-badge');
+
+            // 로딩 상태 표시
+            resultContainer.innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div class="loading-spinner"></div>
+                    <p>${forceRefresh ? 'AI가 어닝콜을 재분석하고 있습니다...' : '분석 결과를 불러오고 있습니다...'}</p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        ${forceRefresh ? '분석에 1-2분 정도 소요될 수 있습니다.' : '캐시된 결과가 있으면 즉시 표시됩니다.'}
+                    </p>
+                </div>
+            `;
+
+            periodBadge.textContent = period;
+            periodBadge.style.display = 'inline-block';
+
+            // 분석 버튼 비활성화
+            document.querySelectorAll('.btn-analyze').forEach(btn => btn.disabled = true);
+
+            // 현재 분석 중인 파일 저장 (재분석용)
+            window.currentAnalysisFile = { filename, period };
+
+            try {
+                const refreshParam = forceRefresh ? '&refresh=true' : '';
+                const response = await fetch(`/api/analyze-earningcall?ticker=${ticker}&filename=${encodeURIComponent(filename)}${refreshParam}`);
+                const data = await response.json();
+
+                if (data.success && data.content) {
+                    // 캐시 상태 표시
+                    const cacheInfo = data.cached
+                        ? `<div class="cache-info" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: #22c55e;">💾 캐시된 분석 결과 (${data.analyzed_at ? new Date(data.analyzed_at).toLocaleDateString('ko-KR') : '날짜 미상'})</span>
+                            <button onclick="analyzeEarningsCall('${filename}', '${period}', true)" class="btn-refresh" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; color: var(--text-secondary);">
+                                🔄 재분석
+                            </button>
+                           </div>`
+                        : `<div class="cache-info" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                            <span style="color: #3b82f6;">✨ 새로 분석 완료 (${new Date().toLocaleDateString('ko-KR')})</span>
+                           </div>`;
+
+                    // Markdown을 HTML로 변환하여 표시
+                    resultContainer.innerHTML = cacheInfo + marked.parse(data.content);
+
+                    // 분석 결과 저장 (노션 내보내기용)
+                    window.currentAnalysisResult = {
+                        ticker: ticker,
+                        period: period,
+                        content: data.content,
+                        analyzed_at: data.analyzed_at || ''
+                    };
+
+                    // 노션 내보내기 버튼 추가 (설정된 경우에만)
+                    checkNotionAndAddButton();
+                } else {
+                    resultContainer.innerHTML = `
+                        <div class="no-files-message" style="color: #ef4444;">
+                            <p>❌ 분석 중 오류가 발생했습니다.</p>
+                            <p style="font-size: 0.9rem;">${data.error || '알 수 없는 오류'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error analyzing earnings call:', error);
+                resultContainer.innerHTML = `
+                    <div class="no-files-message" style="color: #ef4444;">
+                        <p>❌ 분석 요청에 실패했습니다.</p>
+                        <p style="font-size: 0.9rem;">${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                // 분석 버튼 다시 활성화
+                document.querySelectorAll('.btn-analyze').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // 노션 설정 확인 및 버튼 추가
+        async function checkNotionAndAddButton() {
+            try {
+                const res = await fetch('/api/notion-status');
+                const data = await res.json();
+
+                if (data.configured) {
+                    const cacheInfoEl = document.querySelector('.cache-info');
+                    if (cacheInfoEl && !document.querySelector('.btn-notion')) {
+                        const notionBtn = document.createElement('button');
+                        notionBtn.className = 'btn-notion';
+                        notionBtn.innerHTML = '📝 노션에 저장';
+                        notionBtn.style.cssText = 'background: linear-gradient(135deg, #000 0%, #333 100%); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; margin-left: 0.5rem;';
+                        notionBtn.onclick = exportToNotion;
+                        cacheInfoEl.appendChild(notionBtn);
+                    }
+                }
+            } catch (e) {
+                console.log('Notion not configured');
+            }
+        }
+
+        // 노션으로 내보내기
+        async function exportToNotion() {
+            if (!window.currentAnalysisResult) {
+                alert('내보낼 분석 결과가 없습니다.');
+                return;
+            }
+
+            const btn = document.querySelector('.btn-notion');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ 내보내는 중...';
+            }
+
+            try {
+                const res = await fetch('/api/export-to-notion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(window.currentAnalysisResult)
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    if (btn) btn.innerHTML = '✅ 저장 완료!';
+                    if (data.url) {
+                        setTimeout(() => {
+                            if (confirm('노션 페이지가 생성되었습니다. 열어볼까요?')) {
+                                window.open(data.url, '_blank');
+                            }
+                        }, 500);
+                    }
+                } else {
+                    alert('노션 저장 실패: ' + (data.error || '알 수 없는 오류'));
+                    if (btn) btn.innerHTML = '📝 노션에 저장';
+                }
+            } catch (error) {
+                alert('노션 저장 중 오류: ' + error.message);
+                if (btn) btn.innerHTML = '📝 노션에 저장';
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
     </script>
 </body>
 

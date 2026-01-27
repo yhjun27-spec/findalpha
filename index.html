@@ -5,13 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>InSight Stock AI - 프리미엄 기업 분석</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap"
         rel="stylesheet">
-    <script src="main.js" defer></script>
+
 </head>
 
 <body class="dark-theme">
@@ -49,6 +49,33 @@
         </section>
 
         <section id="dashboard-section" class="dashboard-section hidden">
+            <!-- Quick Navigation -->
+            <div class="quick-nav">
+                <button class="quick-nav-btn" onclick="window.location.href='daily-summary.html'">
+                    📊 하루 정리
+                </button>
+                <button class="quick-nav-btn"
+                    onclick="document.getElementById('chart-card').scrollIntoView({behavior: 'smooth'})">
+                    📈 차트
+                </button>
+                <button class="quick-nav-btn"
+                    onclick="document.querySelector('.overview-card').scrollIntoView({behavior: 'smooth'})">
+                    🏢 기업 개요
+                </button>
+                <button class="quick-nav-btn"
+                    onclick="document.getElementById('earnings-card').scrollIntoView({behavior: 'smooth'})">
+                    📞 어닝콜
+                </button>
+                <button class="quick-nav-btn"
+                    onclick="document.querySelector('.news-section').scrollIntoView({behavior: 'smooth'})">
+                    📰 뉴스
+                </button>
+                <button class="quick-nav-btn"
+                    onclick="document.querySelector('.watchlist-section').scrollIntoView({behavior: 'smooth'})">
+                    📋 Watchlist
+                </button>
+            </div>
+
             <!-- Top: Large Chart -->
             <div id="chart-card" class="chart-container card interactive-card">
                 <div class="chart-header">
@@ -101,20 +128,63 @@
                 </div>
             </div>
 
-            <!-- Bottom: Financial Highlights -->
-            <div class="financials-section card">
-                <h3>5개년 연간 Financial Highlight</h3>
+            <!-- Bottom: Watchlist -->
+            <div class="watchlist-section card">
+                <div class="watchlist-header">
+                    <h3>📋 Watchlist</h3>
+                    <button id="add-watchlist-btn" class="add-btn">+ 종목 추가</button>
+                </div>
+
+                <!-- Add Stock Modal (Hidden by default) -->
+                <div id="watchlist-add-form" class="watchlist-form hidden">
+                    <div class="form-row">
+                        <input type="text" id="watchlist-ticker" placeholder="티커 (예: AAPL)" />
+                        <input type="number" id="watchlist-buy-price" placeholder="매수가" step="0.01" />
+                        <select id="watchlist-group">
+                            <option value="기본">기본</option>
+                        </select>
+                        <input type="text" id="watchlist-new-group" placeholder="새 그룹명" class="hidden" />
+                        <button id="toggle-new-group" class="icon-btn-small">+</button>
+                        <button id="save-watchlist-btn" class="save-btn">저장</button>
+                        <button id="cancel-watchlist-btn" class="cancel-btn">취소</button>
+                    </div>
+                </div>
+
+                <!-- Group Filter Tabs -->
+                <div class="watchlist-tabs" id="watchlist-tabs">
+                    <button class="watchlist-tab active" data-group="all">전체</button>
+                </div>
+
+                <!-- Watchlist Table -->
                 <div class="table-wrapper">
-                    <table id="financials-table">
-                        <!-- Dynamic content -->
+                    <table id="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>티커</th>
+                                <th>이름</th>
+                                <th>현재가</th>
+                                <th>매수가</th>
+                                <th>수익률</th>
+                                <th>그룹</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="watchlist-body">
+                            <!-- Dynamic content -->
+                        </tbody>
                     </table>
                 </div>
             </div>
         </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="main.js?v=6" defer></script>
 </body>
 
 </html>

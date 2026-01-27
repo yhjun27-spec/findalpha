@@ -1,3 +1,11 @@
-finance-datareader
+gunicorn
+FinanceDataReader
+yfinance
 pandas
-requests
+flask
+flask-cors
+deep-translator
+duckduckgo-search
+pdfplumber
+google-generativeai
+notion-client
