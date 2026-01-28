@@ -825,7 +825,7 @@ def sectors():
 
 @app.route('/api/movers')
 def movers():
-    """급등락 상위 종목 반환 - yf.download()로 일괄 조회."""
+    """급등락 상위 종목 반환 - Yahoo Finance Screener API 사용."""
     
     # 캐시 확인
     cache_key = 'movers'
@@ -834,53 +834,51 @@ def movers():
         return jsonify(cached)
     
     try:
-        # 모든 종목을 한 번에 다운로드 (훨씬 빠름)
-        tickers_str = ' '.join(MAJOR_STOCKS)
-        data = yf.download(tickers_str, period='2d', group_by='ticker', progress=False, threads=True)
+        gainers = []
+        losers = []
         
-        movers_data = []
+        # Yahoo Finance Screener API 사용
+        try:
+            # day_gainers 스크리너
+            gainer_screener = yf.Screener()
+            gainer_screener.set_predefined_body('day_gainers')
+            gainer_data = gainer_screener.response
+            
+            if gainer_data and 'quotes' in gainer_data:
+                for stock in gainer_data['quotes'][:10]:
+                    gainers.append({
+                        'ticker': stock.get('symbol', ''),
+                        'name': stock.get('shortName', stock.get('symbol', '')),
+                        'sector': '-',
+                        'price': round(stock.get('regularMarketPrice', 0), 2),
+                        'change': round(stock.get('regularMarketChange', 0), 2),
+                        'changePct': round(stock.get('regularMarketChangePercent', 0), 2),
+                        'volume': stock.get('regularMarketVolume', 0),
+                        'marketCap': stock.get('marketCap', 0)
+                    })
+        except Exception as e:
+            print(f"Gainers screener error: {e}")
         
-        for ticker_symbol in MAJOR_STOCKS:
-            try:
-                if ticker_symbol in data.columns.get_level_values(0):
-                    ticker_data = data[ticker_symbol]
-                else:
-                    continue
-                
-                if ticker_data.empty or len(ticker_data) < 2:
-                    continue
-                
-                current_price = float(ticker_data['Close'].iloc[-1])
-                prev_close = float(ticker_data['Close'].iloc[-2])
-                
-                if prev_close == 0:
-                    continue
-                    
-                change = current_price - prev_close
-                change_pct = (change / prev_close * 100)
-                
-                movers_data.append({
-                    'ticker': ticker_symbol,
-                    'name': ticker_symbol,  # 이름은 티커로 대체 (info 호출 생략)
-                    'sector': '-',
-                    'price': round(current_price, 2),
-                    'change': round(change, 2),
-                    'changePct': round(change_pct, 2),
-                    'volume': int(ticker_data['Volume'].iloc[-1]) if 'Volume' in ticker_data else 0,
-                    'marketCap': 0
-                })
-            except Exception as e:
-                print(f"Error processing {ticker_symbol}: {e}")
-                continue
-        
-        # 변동률 절대값 기준 정렬
-        movers_data.sort(key=lambda x: abs(x['changePct']), reverse=True)
-        
-        # 상승/하락 분리
-        gainers = [m for m in movers_data if m['changePct'] > 0][:10]
-        losers = [m for m in movers_data if m['changePct'] < 0]
-        losers.sort(key=lambda x: x['changePct'])
-        losers = losers[:10]
+        try:
+            # day_losers 스크리너
+            loser_screener = yf.Screener()
+            loser_screener.set_predefined_body('day_losers')
+            loser_data = loser_screener.response
+            
+            if loser_data and 'quotes' in loser_data:
+                for stock in loser_data['quotes'][:10]:
+                    losers.append({
+                        'ticker': stock.get('symbol', ''),
+                        'name': stock.get('shortName', stock.get('symbol', '')),
+                        'sector': '-',
+                        'price': round(stock.get('regularMarketPrice', 0), 2),
+                        'change': round(stock.get('regularMarketChange', 0), 2),
+                        'changePct': round(stock.get('regularMarketChangePercent', 0), 2),
+                        'volume': stock.get('regularMarketVolume', 0),
+                        'marketCap': stock.get('marketCap', 0)
+                    })
+        except Exception as e:
+            print(f"Losers screener error: {e}")
         
         print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
         
@@ -903,7 +901,7 @@ def movers():
 
 @app.route('/api/new-highs')
 def new_highs():
-    """52주 신고가 달성 종목 반환 - 최적화된 버전."""
+    """52주 신고가 달성 종목 반환 - Yahoo Finance Screener API 사용."""
     
     # 캐시 확인
     cache_key = 'new_highs'
@@ -912,46 +910,63 @@ def new_highs():
         return jsonify(cached)
     
     try:
-        # 1년치 데이터를 한 번에 다운로드
-        tickers_str = ' '.join(MAJOR_STOCKS)
-        data = yf.download(tickers_str, period='1y', group_by='ticker', progress=False, threads=True)
-        
         new_high_stocks = []
         
-        for ticker_symbol in MAJOR_STOCKS:
-            try:
-                if ticker_symbol in data.columns.get_level_values(0):
-                    ticker_data = data[ticker_symbol]
-                else:
-                    continue
-                
-                if ticker_data.empty or len(ticker_data) < 20:
-                    continue
-                
-                current_price = float(ticker_data['Close'].iloc[-1])
-                year_high = float(ticker_data['High'].max())
-                
-                if year_high == 0:
-                    continue
-                
-                pct_from_high = (current_price / year_high - 1) * 100
-                
-                # 현재가가 52주 고가의 98% 이상이면 신고가
-                if current_price >= year_high * 0.98:
+        # Yahoo Finance Screener API 사용 (52wk_gain 스크리너)
+        try:
+            screener = yf.Screener()
+            # 52주 신고가 근처 종목들 스크리너 시도
+            screener.set_predefined_body('52wk_gain')
+            data = screener.response
+            
+            if data and 'quotes' in data:
+                for stock in data['quotes'][:15]:
+                    fiftyTwoWeekHigh = stock.get('fiftyTwoWeekHigh', 0)
+                    currentPrice = stock.get('regularMarketPrice', 0)
+                    
+                    if fiftyTwoWeekHigh > 0:
+                        pct_from_high = (currentPrice / fiftyTwoWeekHigh - 1) * 100
+                    else:
+                        pct_from_high = 0
+                    
                     new_high_stocks.append({
-                        'ticker': ticker_symbol,
-                        'name': ticker_symbol,
-                        'sector': '-',
-                        'price': round(current_price, 2),
-                        'fiftyTwoWeekHigh': round(year_high, 2),
-                        'marketCap': 0,
+                        'ticker': stock.get('symbol', ''),
+                        'name': stock.get('shortName', stock.get('symbol', '')),
+                        'sector': stock.get('sector', '-'),
+                        'price': round(currentPrice, 2),
+                        'fiftyTwoWeekHigh': round(fiftyTwoWeekHigh, 2),
+                        'marketCap': stock.get('marketCap', 0),
                         'pctFromHigh': round(pct_from_high, 2)
                     })
-            except Exception as e:
-                print(f"Error processing {ticker_symbol}: {e}")
-                continue
+        except Exception as e:
+            print(f"52wk screener error: {e}")
+            # 폴백: most_actives 스크리너 사용
+            try:
+                screener = yf.Screener()
+                screener.set_predefined_body('most_actives')
+                data = screener.response
+                
+                if data and 'quotes' in data:
+                    for stock in data['quotes'][:10]:
+                        fiftyTwoWeekHigh = stock.get('fiftyTwoWeekHigh', 0)
+                        currentPrice = stock.get('regularMarketPrice', 0)
+                        
+                        # 현재가가 52주 고가의 95% 이상인 경우만 포함
+                        if fiftyTwoWeekHigh > 0 and currentPrice >= fiftyTwoWeekHigh * 0.95:
+                            pct_from_high = (currentPrice / fiftyTwoWeekHigh - 1) * 100
+                            new_high_stocks.append({
+                                'ticker': stock.get('symbol', ''),
+                                'name': stock.get('shortName', stock.get('symbol', '')),
+                                'sector': '-',
+                                'price': round(currentPrice, 2),
+                                'fiftyTwoWeekHigh': round(fiftyTwoWeekHigh, 2),
+                                'marketCap': stock.get('marketCap', 0),
+                                'pctFromHigh': round(pct_from_high, 2)
+                            })
+            except Exception as e2:
+                print(f"Fallback screener error: {e2}")
         
-        # 섹터별 그룹핑 (현재는 섹터 정보 없이 '-'로 통일)
+        # 섹터별 그룹핑
         sectors_grouped = {}
         for stock in new_high_stocks:
             sector = stock['sector']
