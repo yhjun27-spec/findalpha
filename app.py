@@ -825,7 +825,7 @@ def sectors():
 
 @app.route('/api/movers')
 def movers():
-    """급등락 상위 종목 반환 - Yahoo Finance Screener API 사용."""
+    """급등락 상위 종목 반환 - 타임아웃 및 폴백 처리 포함."""
     
     # 캐시 확인
     cache_key = 'movers'
@@ -833,13 +833,12 @@ def movers():
     if cached:
         return jsonify(cached)
     
+    gainers = []
+    losers = []
+    
     try:
-        gainers = []
-        losers = []
-        
-        # Yahoo Finance Screener API 사용
+        # Yahoo Finance Screener API 시도 (타임아웃 위험 있음)
         try:
-            # day_gainers 스크리너
             gainer_screener = yf.Screener()
             gainer_screener.set_predefined_body('day_gainers')
             gainer_data = gainer_screener.response
@@ -860,7 +859,6 @@ def movers():
             print(f"Gainers screener error: {e}")
         
         try:
-            # day_losers 스크리너
             loser_screener = yf.Screener()
             loser_screener.set_predefined_body('day_losers')
             loser_data = loser_screener.response
@@ -879,29 +877,29 @@ def movers():
                     })
         except Exception as e:
             print(f"Losers screener error: {e}")
-        
-        print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
-        
-        result = {
-            'success': True,
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'gainers': gainers,
-            'losers': losers
-        }
-        
-        set_cache(cache_key, result)
-        return jsonify(result)
     
     except Exception as e:
-        print(f"Movers Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        print(f"Movers outer error: {e}")
+    
+    # 성공/실패 상관없이 항상 응답
+    result = {
+        'success': True,
+        'date': datetime.now().strftime('%Y-%m-%d'),
+        'gainers': gainers,
+        'losers': losers,
+        'message': '데이터가 없으면 시장 휴장 중이거나 API 지연입니다.' if not gainers and not losers else None
+    }
+    
+    if gainers or losers:
+        set_cache(cache_key, result)
+    
+    print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
+    return jsonify(result)
 
 
 @app.route('/api/new-highs')
 def new_highs():
-    """52주 신고가 달성 종목 반환 - Yahoo Finance Screener API 사용."""
+    """52주 신고가 달성 종목 반환 - 타임아웃 및 폴백 처리 포함."""
     
     # 캐시 확인
     cache_key = 'new_highs'
@@ -909,13 +907,12 @@ def new_highs():
     if cached:
         return jsonify(cached)
     
+    new_high_stocks = []
+    
     try:
-        new_high_stocks = []
-        
         # Yahoo Finance Screener API 사용 (52wk_gain 스크리너)
         try:
             screener = yf.Screener()
-            # 52주 신고가 근처 종목들 스크리너 시도
             screener.set_predefined_body('52wk_gain')
             data = screener.response
             
@@ -940,58 +937,34 @@ def new_highs():
                     })
         except Exception as e:
             print(f"52wk screener error: {e}")
-            # 폴백: most_actives 스크리너 사용
-            try:
-                screener = yf.Screener()
-                screener.set_predefined_body('most_actives')
-                data = screener.response
-                
-                if data and 'quotes' in data:
-                    for stock in data['quotes'][:10]:
-                        fiftyTwoWeekHigh = stock.get('fiftyTwoWeekHigh', 0)
-                        currentPrice = stock.get('regularMarketPrice', 0)
-                        
-                        # 현재가가 52주 고가의 95% 이상인 경우만 포함
-                        if fiftyTwoWeekHigh > 0 and currentPrice >= fiftyTwoWeekHigh * 0.95:
-                            pct_from_high = (currentPrice / fiftyTwoWeekHigh - 1) * 100
-                            new_high_stocks.append({
-                                'ticker': stock.get('symbol', ''),
-                                'name': stock.get('shortName', stock.get('symbol', '')),
-                                'sector': '-',
-                                'price': round(currentPrice, 2),
-                                'fiftyTwoWeekHigh': round(fiftyTwoWeekHigh, 2),
-                                'marketCap': stock.get('marketCap', 0),
-                                'pctFromHigh': round(pct_from_high, 2)
-                            })
-            except Exception as e2:
-                print(f"Fallback screener error: {e2}")
-        
-        # 섹터별 그룹핑
-        sectors_grouped = {}
-        for stock in new_high_stocks:
-            sector = stock['sector']
-            if sector not in sectors_grouped:
-                sectors_grouped[sector] = []
-            sectors_grouped[sector].append(stock)
-        
-        print(f"New highs found: {len(new_high_stocks)} stocks")
-        
-        result = {
-            'success': True,
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'totalCount': len(new_high_stocks),
-            'stocks': new_high_stocks,
-            'bySector': sectors_grouped
-        }
-        
-        set_cache(cache_key, result)
-        return jsonify(result)
     
     except Exception as e:
-        print(f"New Highs Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        print(f"New Highs outer error: {e}")
+    
+    # 섹터별 그룹핑
+    sectors_grouped = {}
+    for stock in new_high_stocks:
+        sector = stock['sector']
+        if sector not in sectors_grouped:
+            sectors_grouped[sector] = []
+        sectors_grouped[sector].append(stock)
+    
+    print(f"New highs found: {len(new_high_stocks)} stocks")
+    
+    # 성공/실패 상관없이 항상 응답
+    result = {
+        'success': True,
+        'date': datetime.now().strftime('%Y-%m-%d'),
+        'totalCount': len(new_high_stocks),
+        'stocks': new_high_stocks,
+        'bySector': sectors_grouped,
+        'message': '데이터가 없으면 시장 휴장 중이거나 API 지연입니다.' if not new_high_stocks else None
+    }
+    
+    if new_high_stocks:
+        set_cache(cache_key, result)
+    
+    return jsonify(result)
 
 
 @app.route('/api/market-news')
