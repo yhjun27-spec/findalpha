@@ -777,36 +777,47 @@ def sectors():
 @app.route('/api/movers')
 def movers():
     """급등락 상위 종목 반환 (S&P 500 대표 종목 기준)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    def get_mover_data(ticker_symbol):
+        """개별 종목 급등락 데이터 조회"""
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            hist = ticker.history(period='2d')
+            info = ticker.info
+            
+            if hist.empty or len(hist) < 2:
+                return None
+            
+            current_price = float(hist['Close'].iloc[-1])
+            prev_close = float(hist['Close'].iloc[-2])
+            change = current_price - prev_close
+            change_pct = (change / prev_close * 100) if prev_close != 0 else 0
+            
+            return {
+                'ticker': ticker_symbol,
+                'name': info.get('shortName', ticker_symbol),
+                'sector': info.get('sector', '-'),
+                'price': current_price,
+                'change': change,
+                'changePct': round(change_pct, 2),
+                'volume': int(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0,
+                'marketCap': info.get('marketCap', 0)
+            }
+        except Exception as e:
+            print(f"Error fetching mover {ticker_symbol}: {e}")
+            return None
+    
     try:
         movers_data = []
         
-        for ticker_symbol in MAJOR_STOCKS:
-            try:
-                ticker = yf.Ticker(ticker_symbol)
-                hist = ticker.history(period='2d')
-                info = ticker.info
-                
-                if hist.empty or len(hist) < 2:
-                    continue
-                
-                current_price = float(hist['Close'].iloc[-1])
-                prev_close = float(hist['Close'].iloc[-2])
-                change = current_price - prev_close
-                change_pct = (change / prev_close * 100) if prev_close != 0 else 0
-                
-                movers_data.append({
-                    'ticker': ticker_symbol,
-                    'name': info.get('shortName', ticker_symbol),
-                    'sector': info.get('sector', '-'),
-                    'price': current_price,
-                    'change': change,
-                    'changePct': round(change_pct, 2),
-                    'volume': int(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0,
-                    'marketCap': info.get('marketCap', 0)
-                })
-            except Exception as e:
-                print(f"Error fetching mover {ticker_symbol}: {e}")
-                continue
+        # 병렬 처리로 속도 개선
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(get_mover_data, ticker): ticker for ticker in MAJOR_STOCKS}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    movers_data.append(result)
         
         # 변동률 절대값 기준 정렬
         movers_data.sort(key=lambda x: abs(x['changePct']), reverse=True)
@@ -816,6 +827,8 @@ def movers():
         losers = [m for m in movers_data if m['changePct'] < 0]
         losers.sort(key=lambda x: x['changePct'])  # 가장 많이 하락한 순
         losers = losers[:10]
+        
+        print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
         
         return jsonify({
             'success': True,
@@ -834,41 +847,52 @@ def movers():
 @app.route('/api/new-highs')
 def new_highs():
     """52주 신고가 달성 종목 반환 (시가총액 $800M 이상)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    def check_new_high(ticker_symbol):
+        """개별 종목 신고가 체크"""
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            info = ticker.info
+            
+            # 시가총액 필터
+            market_cap = info.get('marketCap', 0)
+            if market_cap < 800_000_000:  # $800M
+                return None
+            
+            # 52주 고가와 현재가 비교
+            fifty_two_week_high = info.get('fiftyTwoWeekHigh', 0)
+            current_price = info.get('currentPrice') or info.get('regularMarketPrice', 0)
+            
+            if not fifty_two_week_high or not current_price:
+                return None
+            
+            # 신고가 판정: 현재가가 52주 고가의 98% 이상
+            if current_price >= fifty_two_week_high * 0.98:
+                return {
+                    'ticker': ticker_symbol,
+                    'name': info.get('shortName', ticker_symbol),
+                    'sector': info.get('sector', '-'),
+                    'price': current_price,
+                    'fiftyTwoWeekHigh': fifty_two_week_high,
+                    'marketCap': market_cap,
+                    'pctFromHigh': round((current_price / fifty_two_week_high - 1) * 100, 2)
+                }
+            return None
+        except Exception as e:
+            print(f"Error checking new high for {ticker_symbol}: {e}")
+            return None
+    
     try:
         new_high_stocks = []
-        min_market_cap = 800_000_000  # $800M
         
-        for ticker_symbol in MAJOR_STOCKS:
-            try:
-                ticker = yf.Ticker(ticker_symbol)
-                info = ticker.info
-                
-                # 시가총액 필터
-                market_cap = info.get('marketCap', 0)
-                if market_cap < min_market_cap:
-                    continue
-                
-                # 52주 고가와 현재가 비교
-                fifty_two_week_high = info.get('fiftyTwoWeekHigh', 0)
-                current_price = info.get('currentPrice') or info.get('regularMarketPrice', 0)
-                
-                if not fifty_two_week_high or not current_price:
-                    continue
-                
-                # 신고가 판정: 현재가가 52주 고가의 98% 이상
-                if current_price >= fifty_two_week_high * 0.98:
-                    new_high_stocks.append({
-                        'ticker': ticker_symbol,
-                        'name': info.get('shortName', ticker_symbol),
-                        'sector': info.get('sector', '-'),
-                        'price': current_price,
-                        'fiftyTwoWeekHigh': fifty_two_week_high,
-                        'marketCap': market_cap,
-                        'pctFromHigh': round((current_price / fifty_two_week_high - 1) * 100, 2)
-                    })
-            except Exception as e:
-                print(f"Error checking new high for {ticker_symbol}: {e}")
-                continue
+        # 병렬 처리로 속도 개선
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(check_new_high, ticker): ticker for ticker in MAJOR_STOCKS}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    new_high_stocks.append(result)
         
         # 섹터별 그룹핑
         sectors_grouped = {}
@@ -877,6 +901,8 @@ def new_highs():
             if sector not in sectors_grouped:
                 sectors_grouped[sector] = []
             sectors_grouped[sector].append(stock)
+        
+        print(f"New highs found: {len(new_high_stocks)} stocks")
         
         return jsonify({
             'success': True,
@@ -981,6 +1007,56 @@ def market_news():
 @app.route('/api/sector-stocks')
 def sector_stocks():
     """섹터별 대표 종목들의 주가 변동 반환 (기간별 수익률 포함)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    def get_stock_data(ticker_symbol):
+        """개별 종목 데이터 조회"""
+        try:
+            ticker = yf.Ticker(ticker_symbol)
+            # 1년치 데이터로 모든 기간 계산
+            hist = ticker.history(period='1y')
+            info = ticker.info
+            
+            if hist.empty or len(hist) < 2:
+                return None
+            
+            current_price = float(hist['Close'].iloc[-1])
+            
+            # 일간 변동
+            prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
+            daily_change = current_price - prev_close
+            daily_pct = (daily_change / prev_close * 100) if prev_close != 0 else 0
+            
+            # 1주 수익률 (5 거래일 전)
+            week_ago_idx = max(0, len(hist) - 6)
+            week_ago_price = float(hist['Close'].iloc[week_ago_idx])
+            week_pct = ((current_price - week_ago_price) / week_ago_price * 100) if week_ago_price != 0 else 0
+            
+            # 1개월 수익률 (~21 거래일 전)
+            month_ago_idx = max(0, len(hist) - 22)
+            month_ago_price = float(hist['Close'].iloc[month_ago_idx])
+            month_pct = ((current_price - month_ago_price) / month_ago_price * 100) if month_ago_price != 0 else 0
+            
+            # 1년 수익률 (전체 기간의 첫 데이터)
+            year_ago_price = float(hist['Close'].iloc[0])
+            year_pct = ((current_price - year_ago_price) / year_ago_price * 100) if year_ago_price != 0 else 0
+            
+            return {
+                'ticker': ticker_symbol,
+                'name': info.get('shortName', ticker_symbol),
+                'price': round(current_price, 2),
+                'change': round(daily_change, 2),
+                'changePct': round(daily_pct, 2),
+                'week': round(week_pct, 2),
+                'month': round(month_pct, 2),
+                'year': round(year_pct, 2),
+                'marketCap': info.get('marketCap', 0),
+                'volume': int(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0
+            }
+        except Exception as e:
+            print(f"Error fetching {ticker_symbol}: {e}")
+            return None
+    
     try:
         sector = request.args.get('sector', '')
         
@@ -994,55 +1070,18 @@ def sector_stocks():
         stocks = SECTOR_STOCKS[sector]
         results = []
         
-        for ticker_symbol in stocks:
-            try:
-                ticker = yf.Ticker(ticker_symbol)
-                # 1년치 데이터로 모든 기간 계산
-                hist = ticker.history(period='1y')
-                info = ticker.info
-                
-                if hist.empty or len(hist) < 2:
-                    continue
-                
-                current_price = float(hist['Close'].iloc[-1])
-                
-                # 일간 변동
-                prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current_price
-                daily_change = current_price - prev_close
-                daily_pct = (daily_change / prev_close * 100) if prev_close != 0 else 0
-                
-                # 1주 수익률 (5 거래일 전)
-                week_ago_idx = max(0, len(hist) - 6)
-                week_ago_price = float(hist['Close'].iloc[week_ago_idx])
-                week_pct = ((current_price - week_ago_price) / week_ago_price * 100) if week_ago_price != 0 else 0
-                
-                # 1개월 수익률 (~21 거래일 전)
-                month_ago_idx = max(0, len(hist) - 22)
-                month_ago_price = float(hist['Close'].iloc[month_ago_idx])
-                month_pct = ((current_price - month_ago_price) / month_ago_price * 100) if month_ago_price != 0 else 0
-                
-                # 1년 수익률 (전체 기간의 첫 데이터)
-                year_ago_price = float(hist['Close'].iloc[0])
-                year_pct = ((current_price - year_ago_price) / year_ago_price * 100) if year_ago_price != 0 else 0
-                
-                results.append({
-                    'ticker': ticker_symbol,
-                    'name': info.get('shortName', ticker_symbol),
-                    'price': round(current_price, 2),
-                    'change': round(daily_change, 2),
-                    'changePct': round(daily_pct, 2),
-                    'week': round(week_pct, 2),
-                    'month': round(month_pct, 2),
-                    'year': round(year_pct, 2),
-                    'marketCap': info.get('marketCap', 0),
-                    'volume': int(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0
-                })
-            except Exception as e:
-                print(f"Error fetching {ticker_symbol}: {e}")
-                continue
+        # 병렬 처리로 속도 개선
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(get_stock_data, ticker): ticker for ticker in stocks}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
         
         # 시가총액 순 정렬
         results.sort(key=lambda x: x.get('marketCap', 0), reverse=True)
+        
+        print(f"Sector {sector}: {len(results)} stocks loaded")
         
         return jsonify({
             'success': True,
