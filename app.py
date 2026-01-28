@@ -6,6 +6,9 @@ import pandas as pd
 import os
 import yfinance as yf
 import math
+import json
+import time
+import threading
 
 # Translation support (using deep-translator which is Python 3.14 compatible)
 try:
@@ -17,6 +20,33 @@ except ImportError:
 
 app = Flask(__name__, static_url_path='', static_folder='.')
 CORS(app)
+
+# ============================================
+# 캐싱 시스템 - API 응답 속도 개선
+# ============================================
+CACHE = {}
+CACHE_DURATION = 300  # 5분 (초)
+
+def get_cached(key):
+    """캐시에서 데이터 조회"""
+    if key in CACHE:
+        data, timestamp = CACHE[key]
+        if time.time() - timestamp < CACHE_DURATION:
+            print(f"Cache HIT: {key}")
+            return data
+        else:
+            del CACHE[key]  # 만료된 캐시 삭제
+    return None
+
+def set_cache(key, data):
+    """캐시에 데이터 저장"""
+    CACHE[key] = (data, time.time())
+    print(f"Cache SET: {key}")
+
+
+# 백그라운드 캐시 갱신을 위한 변수
+cache_update_lock = threading.Lock()
+cache_updating = set()
 
 @app.route('/')
 def index():
@@ -674,6 +704,12 @@ SECTOR_STOCKS = {
 @app.route('/api/market-overview')
 def market_overview():
     """주요 시장 지수 데이터 및 당일 변동률 반환."""
+    # 캐시 확인
+    cache_key = 'market_overview'
+    cached = get_cached(cache_key)
+    if cached:
+        return jsonify(cached)
+    
     try:
         results = {}
         today = datetime.now()
@@ -712,11 +748,16 @@ def market_overview():
                 print(f"Error fetching {name}: {e}")
                 continue
         
-        return jsonify({
+        result = {
             'success': True,
             'date': today.strftime('%Y-%m-%d'),
             'indices': results
-        })
+        }
+        
+        # 캐시에 저장
+        set_cache(cache_key, result)
+        
+        return jsonify(result)
     
     except Exception as e:
         print(f"Market Overview Error: {e}")
@@ -728,6 +769,12 @@ def market_overview():
 @app.route('/api/sectors')
 def sectors():
     """섹터별 ETF 성과 데이터 반환."""
+    # 캐시 확인
+    cache_key = 'sectors'
+    cached = get_cached(cache_key)
+    if cached:
+        return jsonify(cached)
+    
     try:
         results = []
         
@@ -761,11 +808,16 @@ def sectors():
         # 일간 변동률 기준 정렬
         results.sort(key=lambda x: x['dailyChange'], reverse=True)
         
-        return jsonify({
+        result = {
             'success': True,
             'date': datetime.now().strftime('%Y-%m-%d'),
             'sectors': results
-        })
+        }
+        
+        # 캐시에 저장
+        set_cache(cache_key, result)
+        
+        return jsonify(result)
     
     except Exception as e:
         print(f"Sectors Error: {e}")
@@ -778,6 +830,12 @@ def sectors():
 def movers():
     """급등락 상위 종목 반환 (S&P 500 대표 종목 기준)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    # 캐시 확인
+    cache_key = 'movers'
+    cached = get_cached(cache_key)
+    if cached:
+        return jsonify(cached)
     
     def get_mover_data(ticker_symbol):
         """개별 종목 급등락 데이터 조회"""
@@ -830,12 +888,17 @@ def movers():
         
         print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
         
-        return jsonify({
+        result = {
             'success': True,
             'date': datetime.now().strftime('%Y-%m-%d'),
             'gainers': gainers,
             'losers': losers
-        })
+        }
+        
+        # 캐시에 저장
+        set_cache(cache_key, result)
+        
+        return jsonify(result)
     
     except Exception as e:
         print(f"Movers Error: {e}")
@@ -848,6 +911,12 @@ def movers():
 def new_highs():
     """52주 신고가 달성 종목 반환 (시가총액 $800M 이상)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    # 캐시 확인
+    cache_key = 'new_highs'
+    cached = get_cached(cache_key)
+    if cached:
+        return jsonify(cached)
     
     def check_new_high(ticker_symbol):
         """개별 종목 신고가 체크"""
@@ -904,13 +973,18 @@ def new_highs():
         
         print(f"New highs found: {len(new_high_stocks)} stocks")
         
-        return jsonify({
+        result = {
             'success': True,
             'date': datetime.now().strftime('%Y-%m-%d'),
             'totalCount': len(new_high_stocks),
             'stocks': new_high_stocks,
             'bySector': sectors_grouped
-        })
+        }
+        
+        # 캐시에 저장
+        set_cache(cache_key, result)
+        
+        return jsonify(result)
     
     except Exception as e:
         print(f"New Highs Error: {e}")
@@ -1100,6 +1174,32 @@ def sector_stocks():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     print(f"Starting Flask Server on port {port}...")
+    
+    # 백그라운드에서 캐시 워밍업
+    def warmup_cache():
+        """서버 시작 후 캐시 워밍업"""
+        import time
+        time.sleep(2)  # 서버 완전히 시작될 때까지 대기
+        print("Starting cache warmup...")
+        
+        with app.test_client() as client:
+            try:
+                print("Warming up: market-overview")
+                client.get('/api/market-overview')
+                print("Warming up: sectors")
+                client.get('/api/sectors')
+                print("Warming up: movers")
+                client.get('/api/movers')
+                print("Warming up: new-highs")
+                client.get('/api/new-highs')
+                print("Cache warmup complete!")
+            except Exception as e:
+                print(f"Cache warmup error: {e}")
+    
+    # 백그라운드 스레드로 캐시 워밍업 실행
+    warmup_thread = threading.Thread(target=warmup_cache, daemon=True)
+    warmup_thread.start()
+    
     app.run(host='0.0.0.0', port=port, debug=False)
 
 
