@@ -676,13 +676,10 @@ SECTOR_ETFS = {
     'Materials': 'XLB'
 }
 
-# 시가총액 $800M 이상 주요 종목 (S&P 500 대표)
+# 시가총액 상위 20개 종목 (빠른 응답을 위해 축소)
 MAJOR_STOCKS = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'JNJ',
-    'V', 'XOM', 'JPM', 'PG', 'MA', 'HD', 'CVX', 'MRK', 'ABBV', 'LLY',
-    'PEP', 'KO', 'COST', 'AVGO', 'TMO', 'MCD', 'WMT', 'CSCO', 'ACN', 'ABT',
-    'DHR', 'NEE', 'VZ', 'NKE', 'ADBE', 'TXN', 'PM', 'CRM', 'UPS', 'RTX',
-    'AMD', 'INTC', 'QCOM', 'NFLX', 'ORCL', 'IBM', 'NOW', 'AMAT', 'INTU', 'ISRG'
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'LLY',
+    'V', 'XOM', 'JPM', 'MA', 'HD', 'AVGO', 'PG', 'WMT', 'NFLX', 'AMD'
 ]
 
 # 섹터별 시가총액 상위 10개 종목
@@ -828,8 +825,7 @@ def sectors():
 
 @app.route('/api/movers')
 def movers():
-    """급등락 상위 종목 반환 (S&P 500 대표 종목 기준)."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    """급등락 상위 종목 반환 - yf.download()로 일괄 조회."""
     
     # 캐시 확인
     cache_key = 'movers'
@@ -837,53 +833,53 @@ def movers():
     if cached:
         return jsonify(cached)
     
-    def get_mover_data(ticker_symbol):
-        """개별 종목 급등락 데이터 조회"""
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            hist = ticker.history(period='2d')
-            info = ticker.info
-            
-            if hist.empty or len(hist) < 2:
-                return None
-            
-            current_price = float(hist['Close'].iloc[-1])
-            prev_close = float(hist['Close'].iloc[-2])
-            change = current_price - prev_close
-            change_pct = (change / prev_close * 100) if prev_close != 0 else 0
-            
-            return {
-                'ticker': ticker_symbol,
-                'name': info.get('shortName', ticker_symbol),
-                'sector': info.get('sector', '-'),
-                'price': current_price,
-                'change': change,
-                'changePct': round(change_pct, 2),
-                'volume': int(hist['Volume'].iloc[-1]) if 'Volume' in hist else 0,
-                'marketCap': info.get('marketCap', 0)
-            }
-        except Exception as e:
-            print(f"Error fetching mover {ticker_symbol}: {e}")
-            return None
-    
     try:
+        # 모든 종목을 한 번에 다운로드 (훨씬 빠름)
+        tickers_str = ' '.join(MAJOR_STOCKS)
+        data = yf.download(tickers_str, period='2d', group_by='ticker', progress=False, threads=True)
+        
         movers_data = []
         
-        # 병렬 처리로 속도 개선
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(get_mover_data, ticker): ticker for ticker in MAJOR_STOCKS}
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    movers_data.append(result)
+        for ticker_symbol in MAJOR_STOCKS:
+            try:
+                if ticker_symbol in data.columns.get_level_values(0):
+                    ticker_data = data[ticker_symbol]
+                else:
+                    continue
+                
+                if ticker_data.empty or len(ticker_data) < 2:
+                    continue
+                
+                current_price = float(ticker_data['Close'].iloc[-1])
+                prev_close = float(ticker_data['Close'].iloc[-2])
+                
+                if prev_close == 0:
+                    continue
+                    
+                change = current_price - prev_close
+                change_pct = (change / prev_close * 100)
+                
+                movers_data.append({
+                    'ticker': ticker_symbol,
+                    'name': ticker_symbol,  # 이름은 티커로 대체 (info 호출 생략)
+                    'sector': '-',
+                    'price': round(current_price, 2),
+                    'change': round(change, 2),
+                    'changePct': round(change_pct, 2),
+                    'volume': int(ticker_data['Volume'].iloc[-1]) if 'Volume' in ticker_data else 0,
+                    'marketCap': 0
+                })
+            except Exception as e:
+                print(f"Error processing {ticker_symbol}: {e}")
+                continue
         
         # 변동률 절대값 기준 정렬
         movers_data.sort(key=lambda x: abs(x['changePct']), reverse=True)
         
-        # 상승 TOP 10, 하락 TOP 10 분리
+        # 상승/하락 분리
         gainers = [m for m in movers_data if m['changePct'] > 0][:10]
         losers = [m for m in movers_data if m['changePct'] < 0]
-        losers.sort(key=lambda x: x['changePct'])  # 가장 많이 하락한 순
+        losers.sort(key=lambda x: x['changePct'])
         losers = losers[:10]
         
         print(f"Movers: {len(gainers)} gainers, {len(losers)} losers")
@@ -895,9 +891,7 @@ def movers():
             'losers': losers
         }
         
-        # 캐시에 저장
         set_cache(cache_key, result)
-        
         return jsonify(result)
     
     except Exception as e:
@@ -909,8 +903,7 @@ def movers():
 
 @app.route('/api/new-highs')
 def new_highs():
-    """52주 신고가 달성 종목 반환 (시가총액 $800M 이상)."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    """52주 신고가 달성 종목 반환 - 최적화된 버전."""
     
     # 캐시 확인
     cache_key = 'new_highs'
@@ -918,52 +911,47 @@ def new_highs():
     if cached:
         return jsonify(cached)
     
-    def check_new_high(ticker_symbol):
-        """개별 종목 신고가 체크"""
-        try:
-            ticker = yf.Ticker(ticker_symbol)
-            info = ticker.info
-            
-            # 시가총액 필터
-            market_cap = info.get('marketCap', 0)
-            if market_cap < 800_000_000:  # $800M
-                return None
-            
-            # 52주 고가와 현재가 비교
-            fifty_two_week_high = info.get('fiftyTwoWeekHigh', 0)
-            current_price = info.get('currentPrice') or info.get('regularMarketPrice', 0)
-            
-            if not fifty_two_week_high or not current_price:
-                return None
-            
-            # 신고가 판정: 현재가가 52주 고가의 98% 이상
-            if current_price >= fifty_two_week_high * 0.98:
-                return {
-                    'ticker': ticker_symbol,
-                    'name': info.get('shortName', ticker_symbol),
-                    'sector': info.get('sector', '-'),
-                    'price': current_price,
-                    'fiftyTwoWeekHigh': fifty_two_week_high,
-                    'marketCap': market_cap,
-                    'pctFromHigh': round((current_price / fifty_two_week_high - 1) * 100, 2)
-                }
-            return None
-        except Exception as e:
-            print(f"Error checking new high for {ticker_symbol}: {e}")
-            return None
-    
     try:
+        # 1년치 데이터를 한 번에 다운로드
+        tickers_str = ' '.join(MAJOR_STOCKS)
+        data = yf.download(tickers_str, period='1y', group_by='ticker', progress=False, threads=True)
+        
         new_high_stocks = []
         
-        # 병렬 처리로 속도 개선
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(check_new_high, ticker): ticker for ticker in MAJOR_STOCKS}
-            for future in as_completed(futures):
-                result = future.result()
-                if result:
-                    new_high_stocks.append(result)
+        for ticker_symbol in MAJOR_STOCKS:
+            try:
+                if ticker_symbol in data.columns.get_level_values(0):
+                    ticker_data = data[ticker_symbol]
+                else:
+                    continue
+                
+                if ticker_data.empty or len(ticker_data) < 20:
+                    continue
+                
+                current_price = float(ticker_data['Close'].iloc[-1])
+                year_high = float(ticker_data['High'].max())
+                
+                if year_high == 0:
+                    continue
+                
+                pct_from_high = (current_price / year_high - 1) * 100
+                
+                # 현재가가 52주 고가의 98% 이상이면 신고가
+                if current_price >= year_high * 0.98:
+                    new_high_stocks.append({
+                        'ticker': ticker_symbol,
+                        'name': ticker_symbol,
+                        'sector': '-',
+                        'price': round(current_price, 2),
+                        'fiftyTwoWeekHigh': round(year_high, 2),
+                        'marketCap': 0,
+                        'pctFromHigh': round(pct_from_high, 2)
+                    })
+            except Exception as e:
+                print(f"Error processing {ticker_symbol}: {e}")
+                continue
         
-        # 섹터별 그룹핑
+        # 섹터별 그룹핑 (현재는 섹터 정보 없이 '-'로 통일)
         sectors_grouped = {}
         for stock in new_high_stocks:
             sector = stock['sector']
@@ -981,9 +969,7 @@ def new_highs():
             'bySector': sectors_grouped
         }
         
-        # 캐시에 저장
         set_cache(cache_key, result)
-        
         return jsonify(result)
     
     except Exception as e:
